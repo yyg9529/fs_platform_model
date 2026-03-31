@@ -1,0 +1,17 @@
+# MATLAB / Simulink
+*.asv
+*.autosave
+*.mlx.autosave
+slprj/
+*.slxc
+*.mex*
+*.p
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store

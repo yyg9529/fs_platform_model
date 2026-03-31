@@ -1,0 +1,76 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>FS Platform Model 交接总览 V1.0-V1.0.3</title>
+<style>
+body {
+  font-family: "Microsoft YaHei", "SimSun", "Calibri", sans-serif;
+  line-height: 1.6;
+  margin: 36px;
+  color: #222;
+}
+h1,h2,h3 { margin-top: 1.0em; }
+code { font-family: "Consolas", "Courier New", monospace; background:#f5f5f5; padding:2px 4px; }
+ul,ol { margin-top: 0.2em; }
+.note { border-left: 4px solid #4a90e2; padding-left: 12px; color:#333; }
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接总览（V1.0 → V1.0.1 → V1.0.2 → V1.0.3）</h1>
+<p class="note">本文件用于跨线程交接。建议优先阅读同目录 <code>FS_Platform_Model_Handover_V1.0_to_V1.0.3.md</code>（最完整版本）。</p>
+
+<h2>V1.0.3 核心升级</h2>
+<ul>
+<li>新增 <code>tire.mode = off/fixed/range</code>，支持轮胎柔度模式化。</li>
+<li>位移语义拆分为 <code>deltaGround / deltaSuspWheel / deltaTire / shockStroke</code>。</li>
+<li>新增赛规层 <code>results.rules</code> 与工程目标层 <code>results.targets</code>。</li>
+<li>正式分离判定层：<code>converged / rulePass / designPass / feasible</code>。</li>
+<li>气动插值显式输出 clamp/fallback 标志，禁止静默失败。</li>
+<li><code>run_batch</code> summary 扩充为可直接筛选方案。</li>
+</ul>
+
+<h2>主接口与结构连续性</h2>
+<ul>
+<li>单入口保持：<code>run_case(caseDef, options)</code></li>
+<li>批处理保持：<code>run_batch(caseArray, options)</code></li>
+<li>目录结构保持：<code>main/config/core/aero/utils/visualization/tests/data</code></li>
+</ul>
+
+<h2>新增输入层</h2>
+<ul>
+<li><code>caseDef.tire</code>：mode、ktFront/ktRear、ktFrontRange/ktRearRange</li>
+<li><code>caseDef.rules</code>：静态离地高、总轮跳、最小 jounce 等赛规约束</li>
+<li><code>caseDef.targets</code>：动态离地高、姿态窗口、aero loss、配平迁移窗口</li>
+</ul>
+
+<h2>range 模式输出</h2>
+<ul>
+<li><code>results.range.low</code></li>
+<li><code>results.range.nominal</code></li>
+<li><code>results.range.high</code></li>
+<li><code>results.range.band</code>（区间汇总）</li>
+</ul>
+
+<h2>插值可追踪标记</h2>
+<ul>
+<li><code>mapClampedAny</code></li>
+<li><code>hfClamped / hrClamped / phiClamped / betaClamped</code></li>
+<li><code>interpFallbackUsed</code></li>
+</ul>
+
+<h2>测试状态</h2>
+<ul>
+<li>V1.0 基础回归：通过</li>
+<li>V1.0.3 新增测试（6项）：通过</li>
+<li>V1.0.2 关键约束测试：通过</li>
+<li>checkcode：<code>TOTAL_CHECKCODE_MESSAGES=0</code></li>
+</ul>
+
+<h2>关键文件路径</h2>
+<ul>
+<li><code>E:\JX Areo adaption\fs_platform_model\docs\FS_Platform_Model_Handover_V1.0_to_V1.0.3.md</code></li>
+<li><code>E:\JX Areo adaption\fs_platform_model\docs\FS_Platform_Model_Handover_V1.0_to_V1.0.3.html</code></li>
+</ul>
+</body>
+</html>

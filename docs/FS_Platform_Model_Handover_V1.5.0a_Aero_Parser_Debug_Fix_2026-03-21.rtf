@@ -1,0 +1,44 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Segoe UI;}}
+\fs22
+\b FS Platform Model Handover V1.5.0a Aero Parser Debug Fix \b0\par
+\par
+\b Purpose \b0\par
+This document records a blocker-level V1.5.0a fix. The goal was not to extend tire-layer capability, but to repair the earlier aero interpolation parser/debug failure that stopped both V1.5 demos before they could enter the tire layer.\par
+\par
+\b Problem Location \b0\par
+Blocking file: aero/interp_aero_map.m\par
+Original failure: illegal use of reserved keyword end\par
+Call chain: demo_tire_table_* -> run_case -> solve_equilibrium -> residual_equilibrium -> calc_external_loads -> calc_aero_state -> interp_aero_map\par
+\par
+\b Core Fixes \b0\par
+1. Removed the corrupted first-line character issue that effectively turned the file header into ifunction.\par
+2. Reworked interp_aero_map.m into a single-main-function file and removed the trailing local helper function.\par
+3. Preserved 4D aero-map interpolation, clamp behavior, linear-to-nearest fallback, and transparent flags.\par
+4. Kept pitchMomentTable optional; when absent, pitchMomentExtra remains 0.0.\par
+\par
+\b Boundaries Kept Intact \b0\par
+1. The project was not rebuilt and the directory structure was not changed.\par
+2. The main chain run_case -> validate -> preprocess -> solve -> postprocess was not changed.\par
+3. The V1.5 tire proxy layer was not pushed back into the main equilibrium solver.\par
+4. Aero map behavior was not replaced by constant placeholders.\par
+\par
+\b Main Files Updated \b0\par
+aero/interp_aero_map.m\par
+core/calc_aero_state.m\par
+tests/test_aero_map_flags.m\par
+tests/test_interp_aero_map_basic.m\par
+tests/test_interp_aero_map_clamp_flags.m\par
+tests/test_interp_aero_map_no_pitch_table.m\par
+tests/test_interp_aero_map_fallback_nearest.m\par
+README.md\par
+\par
+\b Verification \b0\par
+The four new direct aero interpolation tests passed. test_aero_map_flags continued to pass. demo_tire_table_pure_lateral and demo_tire_table_brake_in_turn both passed the original aero blocker and entered the tire layer. The remaining tire-table out-of-range warning is non-blocking.\par
+\par
+\b Packaging Note \b0\par
+Temporary runtime folders such as .matlab_env, .matlab_prefs, and .tmp are not part of the source update and must be excluded from release zip packages.\par
+\par
+\b Next Step Guidance \b0\par
+Keep interp_aero_map.m as a single-main-function file. If V1.5.x continues, prioritize cleaning up non-blocking tire-table out-of-range warnings instead of reopening the aero parser fix.\par
+}

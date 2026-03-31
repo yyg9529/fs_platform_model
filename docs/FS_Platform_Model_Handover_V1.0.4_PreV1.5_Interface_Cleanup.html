@@ -1,0 +1,81 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FS Platform Model Handover V1.0.4 Pre-V1.5 Interface Cleanup</title>
+<style>
+body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; line-height: 1.65; margin: 36px; color: #1f2328; }
+h1, h2 { color: #0f3b66; }
+ul { margin-top: 0.4em; }
+code { background: #f3f5f7; padding: 0.1em 0.35em; border-radius: 4px; }
+.note { border-left: 4px solid #0f3b66; padding-left: 12px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接文档（V1.0.4｜Pre-V1.5 Interface Cleanup）</h1>
+<p>本文件记录本轮“进入 V1.5 前的接口清洁型修订”。它不是新版本主线文档，而是在当前 <code>V1.0.4</code> 稳定骨架上，对标准 case 与正式接口做一次定点清理。</p>
+
+<h2>本次修订的定位</h2>
+<ul>
+<li>不重建项目，不改主目录结构。</li>
+<li>不进入 V1.5 的轮胎代理层开发。</li>
+<li>不改写三自由度准静态平台主求解链。</li>
+<li>只做标准 case 显式化、<code>sus.kt</code> 正式迁移、warning 清洁。</li>
+</ul>
+
+<h2>本次核心结论</h2>
+<ul>
+<li>标准 case 现在尽量显式给出活跃字段，不再依赖 autofill warning 才成立。</li>
+<li>标准轮胎输入正式统一到 <code>tire.mode / ktFront / ktRear / ktFrontRange / ktRearRange</code>。</li>
+<li><code>sus.kt</code> 只保留 backward compatibility，不再出现在 baseline / target 正式输入中。</li>
+<li>baseline / target / demo 正常运行时，不再出现 <code>Auto-filled missing fields</code> 与 <code>caseDef.sus.kt is deprecated</code> warning。</li>
+<li>shock/wheel consistency warning 机制仍保留，但标准 case 不应长期带着该 warning 运行。</li>
+</ul>
+
+<h2>本轮修改文件</h2>
+<ul>
+<li><code>config/build_case_2025_baseline.m</code></li>
+<li><code>config/build_case_2026_target.m</code></li>
+<li><code>core/validate_case_struct.m</code></li>
+<li><code>core/preprocess_case.m</code></li>
+<li><code>main/demo_case_2026.m</code></li>
+<li><code>main/demo_spring_sweep_map.m</code></li>
+<li><code>utils/build_spring_sweep_cases.m</code></li>
+<li><code>README.md</code></li>
+</ul>
+
+<h2>warning 机制的当前定位</h2>
+<ul>
+<li>autofill warning：继续用于暴露输入缺口。</li>
+<li>deprecated warning：继续用于暴露旧字段残留。</li>
+<li>shock/wheel consistency warning：继续用于暴露机械约束矛盾。</li>
+</ul>
+<div class="note">
+<p><strong>当前要求：</strong> 这些 warning 机制仍保留，但主要服务于旧 case 兼容与异常测试，不应再成为标准 case 的正常运行前提。</p>
+</div>
+
+<h2>新增测试</h2>
+<ul>
+<li><code>test_standard_case_no_autofill_warning</code></li>
+<li><code>test_standard_case_no_sus_kt_deprecated_warning</code></li>
+<li><code>test_standard_case_no_shock_wheel_consistency_warning</code></li>
+<li><code>test_demo_case_no_interface_cleanup_warning</code></li>
+</ul>
+
+<h2>验证结果</h2>
+<ul>
+<li>V1.0.4 全量旧测试继续通过。</li>
+<li>本轮新增 4 项接口清洁测试通过。</li>
+<li><code>checkcode</code> 结果为 <code>TOTAL_CHECKCODE_MESSAGES=0</code>。</li>
+</ul>
+
+<h2>下一线程建议</h2>
+<ul>
+<li>如果进入 V1.5，继续坚持标准轮胎输入走 <code>tire.*</code>。</li>
+<li>兼容层继续保留，但不要重新扩张到正式 case。</li>
+<li>在当前清洁基线之上再引入轮胎代理层字段与结果层。</li>
+</ul>
+
+<p>详细内容请参见同目录 Markdown 主文档：<code>FS_Platform_Model_Handover_V1.0.4_PreV1.5_Interface_Cleanup.md</code>。</p>
+</body>
+</html>

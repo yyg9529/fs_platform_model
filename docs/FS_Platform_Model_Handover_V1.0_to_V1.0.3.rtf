@@ -1,0 +1,48 @@
+﻿{\rtf1\ansi\ansicpg65001\deff0
+{\fonttbl
+{\f0\fnil\fcharset134 Microsoft YaHei;}
+{\f1\fnil\fcharset0 Calibri;}
+}
+\viewkind4\uc1\pard\f0\fs24
+FS Platform Model 交接总览（V1.0 -> V1.0.1 -> V1.0.2 -> V1.0.3）\par
+\par
+\b 文档说明\b0\par
+本 RTF 为摘要版，完整内容请优先阅读同目录 Markdown：\par
+FS_Platform_Model_Handover_V1.0_to_V1.0.3.md\par
+\par
+\b V1.0.3 核心升级\b0\par
+1) 新增 tire.mode: off / fixed / range\par
+2) 位移语义拆分：deltaGround / deltaSuspWheel / deltaTire / shockStroke\par
+3) 新增 rules 判据层与 targets 判据层\par
+4) 分层判定：converged / rulePass / designPass / feasible\par
+5) 气动插值显式输出 clamp/fallback 标记\par
+6) run_batch summary 扩展为可直接筛选方案\par
+\par
+\b 主接口保持不变\b0\par
+- run_case(caseDef, options)\par
+- run_batch(caseArray, options)\par
+\par
+\b 新增输入层\b0\par
+- caseDef.tire\par
+- caseDef.rules\par
+- caseDef.targets\par
+\par
+\b 新增输出层\b0\par
+- results.tire\par
+- results.rules\par
+- results.targets\par
+- results.range.low / nominal / high（range 模式）\par
+\par
+\b 气动标记\b0\par
+- mapClampedAny\par
+- hfClamped / hrClamped / phiClamped / betaClamped\par
+- interpFallbackUsed\par
+\par
+\b 当前验证状态\b0\par
+- 旧基础测试：通过\par
+- V1.0.3 新增测试：通过\par
+- V1.0.2 关键约束测试：通过\par
+- checkcode: TOTAL_CHECKCODE_MESSAGES=0\par
+\par
+\pard\f1\fs20 Generated for Word/WPS compatibility with UTF-8 RTF (summary version).\par
+}

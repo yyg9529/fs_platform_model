@@ -1,0 +1,69 @@
+﻿{\rtf1\ansi\ansicpg65001\deff0
+{\fonttbl
+{\f0\fnil\fcharset134 Microsoft YaHei;}
+{\f1\fnil\fcharset0 Calibri;}
+}
+\viewkind4\uc1\pard\f0\fs24
+FS Platform Model \u20132?\u32432?\u25991?\u26723?\u65288?V1.0 \u8594? V1.0.1 \u8594? V1.0.2\u65289?\par
+\par
+\b \u25991?\u26723?\u29992?\u36884?\b0\par
+\u26412?\u25991?\u26723?\u29992?\u20110?\u36328?\u32447?\u31243?\u20132?\u25509?\u65292?\u20445?\u35777?\u21518?\u32493?\u32447?\u31243?\u21487?\u24555?\u36895?\u29702?\u35299?\u39033?\u30446?\u36827?\u23637?\u12290?\par
+\par
+\b \u29256?\u26412?\u28436?\u36827?\u20851?\u31995?\b0\par
+1) V1.0: \u24050?\u23436?\u25104?\u19977?\u33258?\u30001?\u24230?\u24179?\u21488?\u27169?\u22411?\u19982?\u27668?\u21160?\u32742?\u21512?\u20027?\u38142?\u12290?\par
+2) V1.0.1: \u20572?\u29992? bump/droop \u38468?\u21152?\u21463?\u21147?\u65292?\u24341?\u20837? shock eye-to-eye \u36755?\u20837?\u19982?\u34892?\u31243?\u21518?\u22788?\u29702?\u21028?\u25454?\u12290?\par
+3) V1.0.2: \u22312? V1.0.1 \u22522?\u30784?\u19978?\u32479?\u19968?\u20026?\u24748?\u26550?-\u27668?\u21160?\u24179?\u21488?\u27169?\u22411?\u65292?\u20851?\u38190?\u25913?\u21160?\u20026? keq=kw\u12289?\u21046?\u24213?\u31227?\u38500? kt \u21442?\u19982?\u20027?\u24179?\u34913?\u12290?\par
+\par
+\b V1.0.2 \u26680?\u24515?\u23450?\u20041?\b0\par
+- \u29366?\u24577?\u21521?\u37327?: q=[z; theta; phi]\par
+- z>0: \u36710?\u36523?\u19979?\u27785?\u65307?theta>0: \u36710?\u22836?\u19979?\u20463?\u65307?phi>0: \u36710?\u36523?\u21521?\u21491?\u20391?\u20542?\u12290?\par
+- mr \u23450?\u20041?: spring/wheel\par
+- kw = ks * mr^2\par
+- \u20027?\u24179?\u34913?\u21018?\u24230?: keq = kw\par
+- \u31105?\u27490?\u32487?\u32493?\u20351?\u29992?: keq = kw*kt/(kw+kt)\par
+- deltaWheel = \u32431?\u24748?\u26550?\u36718?\u31471?\u20301?\u31227?\par
+- shockStroke = mr .* deltaWheel\par
+\par
+\b shock \u38271?\u24230?\u20307?\u31995?\u65288?\u20445?\u25345?\u33258? V1.0.1\u65289?\b0\par
+- sus.shockLenExtended\par
+- sus.shockLenCompressed\par
+- sus.shockLenStatic\par
+- \u25903?\u25345?\u26631?\u37327?\u25110? [FL FR RL RR] \u22235?\u20803?\u36755?\u20837?\par
+- \u27966?\u29983?\u37327?: shockStrokeTotal / shockStrokeStaticUsed / shockCompAvail / shockReboundAvail\par
+\par
+\b converged \u19982? feasible \u20998?\u31163?\b0\par
+- converged: \u20165?\u34920?\u31034?\u25968?\u20540?\u27714?\u35299?\u25104?\u21151?\par
+- feasible: \u34920?\u31034?\u24037?\u31243?\u21487?\u25509?\u21463?\u65288?wheel/shock/clearance \u22343?\u28385?\u36275?\u65289?\par
+\par
+\b \u20027?\u25509?\u21475?\u20445?\u25345?\u19981?\u21464?\b0\par
+- run_case(caseDef, options)\par
+- run_batch(caseArray, options)\par
+\par
+\b \u20860?\u23481?\u20445?\u30041?\u23383?\u27573?\u65288?\u19981?\u21442?\u19982?\u24403?\u21069?\u20027?\u27714?\u35299?\u65289?\b0\par
+- sus.kt (deprecated)\par
+- sus.kBump / bumpGap / kDroop / droopGap (deprecated)\par
+\par
+\b \u27979?\u35797?\u20307?\u31995?\u65288?\u24050?\u36890?\u36807?\u65289?\b0\par
+1) test_zero_speed_zero_load\par
+2) test_static_symmetry\par
+3) test_roll_gradient_linear_case\par
+4) test_pitch_under_braking\par
+5) test_shock_length_derived_metrics\par
+6) test_shock_comp_violation\par
+7) test_shock_rebound_violation\par
+8) test_wheel_shock_consistency\par
+9) test_feasible_flag\par
+\par
+\b \u25209?\u37327?\u27719?\u24635?\u24050?\u25193?\u23637?\u23383?\u27573?\b0\par
+\u21253?\u21547? Converged/Feasible/\u22900?\u24577?/\u27668?\u21160?/\u34892?\u31243?/\u38388?\u38553?\u31561?\u26041?\u26696?\u31579?\u36873?\u25152?\u38656?\u21015?\u12290?\par
+\par
+\b \u35828?\u26126?\b0\par
+\u24403?\u21069?\u29256?\u26412?\u26159?\u22312? V1.0 \u19982? V1.0.1 \u22522?\u30784?\u19978?\u30340?\u36830?\u32493?\u21319?\u32423?\u65292?\u19981?\u26159?\u26032?\u24314?\u24037?\u31243?\u12290?\par
+\u24403?\u21069?\u27169?\u22411?\u23450?\u20301?\u20026?\u24748?\u26550?-\u27668?\u21160?\u20934?\u38745?\u24577?\u24179?\u21488?\u27169?\u22411?\u12290?\par
+\par
+\b \u20851?\u38190?\u25991?\u26723?\u36335?\u24452?\b0\par
+Markdown \u20027?\u25991?\u26723?: FS_Platform_Model_Handover_V1.0_to_V1.0.2.md\par
+RTF \u29256?: FS_Platform_Model_Handover_V1.0_to_V1.0.2.rtf\par
+\par
+\pard\f1\fs20 Generated for Word/WPS compatibility with default Chinese font: Microsoft YaHei.\par
+}

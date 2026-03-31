@@ -1,0 +1,46 @@
+﻿{\rtf1\ansi\deff0
+{\fonttbl{\f0 Segoe UI;}}
+\fs22
+\b FS Platform Model Handover V1.0.4 \b0\par
+\par
+\b Version Positioning \b0\par
+V1.0.4 is a continuous upgrade on top of V1.0.3a. It does not rebuild the project, does not rewrite the solver core, and does not enter V1.5 or V2.0.\par
+\par
+\b Core Additions \b0\par
+1. Front and rear spring sweep pass/fail maps.\par
+2. aeroPlatformPass, scrapePassQuasiStatic, and scrapePassBumpAdjusted.\par
+3. caseDef.bumpAdjust.enable, reserveFront, reserveRear, notes.\par
+4. hDynamicAllBumpAdjusted, hDynamicMinBumpAdjusted, dynamicClearanceBumpAdjustedPass.\par
+5. Quasi-static and bump-adjusted four-class maps.\par
+\par
+\b Pass Definitions \b0\par
+aeroPlatformPass = aeroLossPass && frontShareMigrationPass\par
+scrapePassQuasiStatic = staticGroundClearancePass && dynamicClearancePass && ~clearanceViolation\par
+scrapePassBumpAdjusted = staticGroundClearancePass && dynamicClearanceBumpAdjustedPass && ~bumpAdjustedClearanceViolation\par
+\par
+\b Bump-Adjusted Boundary \b0\par
+The bump-adjusted feature is only a conservative correction applied on quasi-static dynamic clearance for scrape robustness screening. It is not a full transient bump model and does not add new states or time-domain dynamics.\par
+\par
+\b Added Files \b0\par
+run_spring_sweep.m\par
+demo_spring_sweep_map.m\par
+plot_spring_sweep_map.m\par
+build_spring_sweep_cases.m\par
+classify_spring_sweep_map.m\par
+FS_Platform_Model_Handover_V1.0_to_V1.0.4.md\par
+FS_Platform_Model_Handover_V1.0_to_V1.0.4.html\par
+FS_Platform_Model_Handover_V1.0_to_V1.0.4.rtf\par
+\par
+\b Added Tests \b0\par
+test_aero_platform_pass_definition\par
+test_scrape_pass_quasi_static_definition\par
+test_bump_adjusted_clearance_split\par
+test_bump_adjusted_scrape_can_fail_when_quasi_static_pass\par
+test_spring_sweep_classification_codes\par
+test_run_batch_summary_fields_v104\par
+test_demo_spring_sweep_map_runs\par
+test_bump_adjust_input_expansion\par
+\par
+\b Conclusion \b0\par
+V1.0.4 is a screening-layer and robustness-layer enhancement for the existing quasi-static platform model. It is not a new solver and not a transient vehicle dynamics package.\par
+}

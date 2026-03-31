@@ -1,0 +1,73 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>FS Platform Model 交接总览 V1.0-V1.0.2</title>
+<style>
+body {
+  font-family: "Microsoft YaHei", "SimSun", "Calibri", sans-serif;
+  line-height: 1.6;
+  margin: 36px;
+  color: #222;
+}
+h1,h2,h3 { margin-top: 1.0em; }
+code { font-family: "Consolas", "Courier New", monospace; background:#f5f5f5; padding:2px 4px; }
+ul,ol { margin-top: 0.2em; }
+.note { border-left: 4px solid #4a90e2; padding-left: 12px; color:#333; }
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接总览（V1.0 → V1.0.1 → V1.0.2）</h1>
+<p class="note">本文件用于跨线程交接。建议优先阅读同目录 <code>FS_Platform_Model_Handover_V1.0_to_V1.0.2.md</code>（最完整版本）。</p>
+
+<h2>版本演进</h2>
+<ol>
+<li>V1.0：建立三自由度准静态平台模型与气动耦合主链。</li>
+<li>V1.0.1：停用 bump/droop 附加力；引入 shock eye-to-eye 输入与后处理约束。</li>
+<li>V1.0.2：统一为悬架-气动平台模型，主平衡刚度改为 <code>keq=kw</code>，<code>kt</code> 不再参与主平衡。</li>
+</ol>
+
+<h2>V1.0.2 核心定义</h2>
+<ul>
+<li>状态：<code>q=[z;theta;phi]</code></li>
+<li>符号：<code>z&gt;0</code> 下沉，<code>theta&gt;0</code> 车头下俯，<code>phi&gt;0</code> 向右侧倾</li>
+<li><code>kw = ks * mr^2</code>，且 <code>keq = kw</code></li>
+<li>禁止继续使用：<code>keq = kw*kt/(kw+kt)</code></li>
+<li><code>deltaWheel</code> = 纯悬架轮端位移</li>
+<li><code>shockStroke = mr .* deltaWheel</code></li>
+</ul>
+
+<h2>关键接口（保持不变）</h2>
+<ul>
+<li><code>run_case(caseDef, options)</code></li>
+<li><code>run_batch(caseArray, options)</code></li>
+</ul>
+
+<h2>converged 与 feasible</h2>
+<ul>
+<li><code>converged</code>：仅表示数值收敛</li>
+<li><code>feasible</code>：工程可接受（wheel/shock/clearance 无违规）</li>
+</ul>
+
+<h2>兼容字段（deprecated）</h2>
+<ul>
+<li><code>sus.kt</code>：兼容保留，不参与主平衡</li>
+<li><code>sus.kBump/bumpGap/kDroop/droopGap</code>：兼容保留，当前忽略</li>
+</ul>
+
+<h2>测试状态</h2>
+<ul>
+<li>checkcode：0 问题</li>
+<li>demo：通过</li>
+<li>9项核心测试：全部通过</li>
+<li>run_batch 汇总字段检查：通过</li>
+</ul>
+
+<h2>关键文件路径</h2>
+<ul>
+<li><code>E:\JX Areo adaption\fs_platform_model\docs\FS_Platform_Model_Handover_V1.0_to_V1.0.2.md</code></li>
+<li><code>E:\JX Areo adaption\fs_platform_model\docs\FS_Platform_Model_Handover_V1.0_to_V1.0.2.rtf</code></li>
+<li><code>E:\JX Areo adaption\fs_platform_model\docs\FS_Platform_Model_Handover_V1.0_to_V1.0.2.html</code></li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,60 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FS Platform Model Handover V1.0.3a</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;max-width:960px;margin:32px auto;padding:0 20px;line-height:1.65;color:#1f2937}
+h1,h2{color:#111827} code,pre{background:#f3f4f6;border-radius:4px} code{padding:2px 4px} pre{padding:12px;overflow:auto}
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接总览（V1.0.3a）</h1>
+<p>本文档用于 V1.0.3a 交接，重点说明 static/dynamic clearance、effective travel、range 模式 inputs 结构与 warning 机制的正式语义。</p>
+<h2>本次版本增量</h2>
+<ul>
+<li>正式拆分 static clearance 与 dynamic clearance</li>
+<li>rules 层只看静态离地高</li>
+<li>targets 层只看动态离地高</li>
+<li>引入 effective travel 进入 rule check</li>
+<li>修正 tire.mode='range' 顶层 results.inputs / inputsRaw / inputsNominal 结构</li>
+<li>validation.warnings 在 warnOnDeprecatedInput=true 时真实 warning(...) 发射</li>
+<li>run_batch summary 增加 static/dynamic clearance 与 effective travel 字段</li>
+</ul>
+<h2>当前统一物理语义</h2>
+<ul>
+<li><code>kw = ks * mr^2</code></li>
+<li><code>keq = kw</code>（off）</li>
+<li><code>keq = kw * kt / (kw + kt)</code>（fixed / range）</li>
+<li><code>deltaSuspWheel = Fmain ./ kw</code></li>
+<li><code>deltaTire = Fmain ./ kt</code></li>
+<li><code>deltaGround = deltaSuspWheel + deltaTire</code></li>
+<li><code>shockStroke = mr .* deltaSuspWheel</code></li>
+</ul>
+<h2>clearance 定义</h2>
+<ul>
+<li>静态：<code>results.clearance.hStaticAll / hStaticMin / hStaticMinName</code></li>
+<li>动态：<code>results.clearance.hDynamicAll / hDynamicMin / hDynamicMinName</code></li>
+<li>兼容字段 <code>hAll / hMin / hMinName</code> 统一映射到 dynamic clearance</li>
+</ul>
+<h2>effective travel</h2>
+<ul>
+<li><code>effectiveJounce = min(jounceMax, wheelJounceFromShock)</code></li>
+<li><code>effectiveDroop = min(droopMax, wheelDroopFromShock)</code></li>
+<li><code>effectiveTotalTravel = effectiveJounce + effectiveDroop</code></li>
+</ul>
+<h2>run_batch 关键列</h2>
+<ul>
+<li><code>hStaticMin</code>, <code>hDynamicMin</code>, <code>hMin</code></li>
+<li><code>StaticGroundClearancePass</code>, <code>DynamicClearancePass</code></li>
+<li><code>EffectiveJounce</code>, <code>EffectiveTotalTravel</code></li>
+<li><code>RulePass</code>, <code>DesignPass</code>, <code>Feasible</code></li>
+</ul>
+<h2>最近一次验证</h2>
+<ul>
+<li>日期：2026-03-20</li>
+<li>新增 V1.0.3a 关键测试全部通过</li>
+<li>MATLAB 需在沙箱外运行；沙箱内启动会报 File system inconsistency</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FS Platform Model Handover V1.5.0a Aero Parser Debug Fix</title>
+<style>
+body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; line-height: 1.65; margin: 36px; color: #1f2328; }
+h1, h2 { color: #0f3b66; }
+ul { margin-top: 0.4em; }
+code { background: #f3f5f7; padding: 0.1em 0.35em; border-radius: 4px; }
+.note { border-left: 4px solid #0f3b66; padding-left: 12px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接文档（V1.5.0a｜Aero Parser / Debug Fix）</h1>
+<p>本文件记录 <code>V1.5.0a</code> 的一次阻塞级基础修复。重点不是继续扩展轮胎代理层，而是先修复更前置的气动插值层 parser/debug 阻塞，使两个 <code>V1.5</code> demo 能真正穿过 aero map 并进入 tire layer。</p>
+
+<h2>问题定位</h2>
+<ul>
+<li>阻塞文件：<code>aero/interp_aero_map.m</code></li>
+<li>原始报错：非法使用保留关键字 <code>end</code></li>
+<li>真实调用链：<code>demo_tire_table_* -&gt; run_case -&gt; solve_equilibrium -&gt; residual_equilibrium -&gt; calc_external_loads -&gt; calc_aero_state -&gt; interp_aero_map</code></li>
+<li>根因不是 tire layer 本体，而是更前置的 aero parser/兼容性问题。</li>
+</ul>
+
+<h2>本次核心修复</h2>
+<ul>
+<li>修复 <code>interp_aero_map.m</code> 首行异常字符污染，消除 <code>ifunction</code> 风险。</li>
+<li>将 <code>interp_aero_map.m</code> 收口为单主函数文件，移除尾部 local helper function。</li>
+<li>继续保留 4D aero map 插值，不用常数占位绕过。</li>
+<li>继续保留 query clamp、<code>linear -&gt; nearest</code> fallback、透明 flag 输出。</li>
+<li><code>pitchMomentTable</code> 继续作为可选项，缺失时返回 <code>0.0</code>。</li>
+</ul>
+
+<h2>保持不变的边界</h2>
+<ul>
+<li>不重建项目，不改主目录结构。</li>
+<li>不改 <code>run_case -&gt; validate -&gt; preprocess -&gt; solve -&gt; postprocess</code> 主链。</li>
+<li>不把 <code>V1.5</code> tire layer 塞回主平衡方程。</li>
+<li>不删除 aero map、<code>beta</code>、<code>phi</code> 或透明 warning/flag 语义。</li>
+</ul>
+<div class="note">
+<p><strong>当前结论：</strong> 本轮修复点明确位于 aero map 解析层，而不是 tire layer 本体。`V1.5` 轮胎代理层的工程边界保持不变。</p>
+</div>
+
+<h2>本轮修改文件</h2>
+<ul>
+<li><code>aero/interp_aero_map.m</code></li>
+<li><code>core/calc_aero_state.m</code></li>
+<li><code>tests/test_aero_map_flags.m</code></li>
+<li><code>tests/test_interp_aero_map_basic.m</code></li>
+<li><code>tests/test_interp_aero_map_clamp_flags.m</code></li>
+<li><code>tests/test_interp_aero_map_no_pitch_table.m</code></li>
+<li><code>tests/test_interp_aero_map_fallback_nearest.m</code></li>
+<li><code>README.md</code></li>
+</ul>
+
+<h2>验证结果</h2>
+<ul>
+<li>新增并通过 4 项 aero 插值层直接测试。</li>
+<li>既有 <code>test_aero_map_flags</code> 继续通过。</li>
+<li><code>demo_tire_table_pure_lateral</code> 已通过 aero 原阻塞点并进入 tire layer。</li>
+<li><code>demo_tire_table_brake_in_turn</code> 已通过 aero 原阻塞点并进入 tire layer。</li>
+<li>两个 demo 当前可能出现 <code>evaluate_tire_table_model:OutOfRange</code> warning，但这属于非阻塞轮胎表覆盖问题。</li>
+</ul>
+
+<h2>运行时目录说明</h2>
+<ul>
+<li>本轮排障过程中曾临时生成 <code>.matlab_env</code>、<code>.matlab_prefs</code>、<code>.tmp</code> 等运行时目录。</li>
+<li>这些目录不是项目源码，不应被打包进正式 zip。</li>
+<li>后续版本打包时应显式排除这类运行时产物，否则会异常放大包体积。</li>
+</ul>
+
+<h2>下一线程建议</h2>
+<ul>
+<li>继续保持 <code>interp_aero_map.m</code> 的单主函数写法，不要重新引入尾部 local helper。</li>
+<li>若继续做 <code>V1.5.x</code>，优先收口示例 tire table 的 out-of-range warning，而不是重新改 aero parser。</li>
+<li>若未来继续修改气动插值层，应继续保留 clamp/fallback/flag 的透明语义。</li>
+</ul>
+
+<p>详细内容请参见同目录 Markdown 主文档：<code>FS_Platform_Model_Handover_V1.5.0a_Aero_Parser_Debug_Fix_2026-03-21.md</code>。</p>
+</body>
+</html>

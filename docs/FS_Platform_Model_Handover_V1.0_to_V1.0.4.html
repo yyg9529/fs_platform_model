@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FS Platform Model Handover V1.0.4</title>
+<style>
+body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; line-height: 1.6; margin: 36px; color: #1f2328; }
+h1, h2 { color: #0f3b66; }
+ul { margin-top: 0.4em; }
+code { background: #f3f5f7; padding: 0.1em 0.35em; border-radius: 4px; }
+.note { border-left: 4px solid #0f3b66; padding-left: 12px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>FS Platform Model 交接总览（V1.0.4）</h1>
+<p>本版本是在 <code>V1.0.3a</code> 基础上的连续升级，不重建项目、不改写 solver 主链，也不进入 <code>V1.5</code> 或 <code>V2.0</code>。</p>
+
+<h2>版本链</h2>
+<ul>
+<li><strong>V1.0</strong>：建立三自由度准静态平台模型与气动耦合主链。</li>
+<li><strong>V1.0.1</strong>：停用 bump/droop 附加力，引入 eye-to-eye shock 输入与行程后处理判据。</li>
+<li><strong>V1.0.3a</strong>：拆分 static/dynamic clearance，rules 只看静态，targets 只看动态，并引入 effective travel。</li>
+<li><strong>V1.0.4</strong>：新增 spring sweep map 与 bump-adjusted scrape robustness map。</li>
+</ul>
+
+<h2>V1.0.4 核心新增</h2>
+<ul>
+<li>新增 <code>aeroPlatformPass</code>，定义为 <code>aeroLossPass &amp;&amp; frontShareMigrationPass</code>。</li>
+<li>新增 <code>scrapePassQuasiStatic</code>，定义为 static rule + dynamic clearance target + 无 clearanceViolation。</li>
+<li>新增 <code>scrapePassBumpAdjusted</code>，定义为 static rule + bump-adjusted dynamic clearance target + 无 bump-adjusted violation。</li>
+<li>新增 <code>caseDef.bumpAdjust.enable/reserveFront/reserveRear/notes</code>。</li>
+<li>新增 quasi-static 与 bump-adjusted 两套四色分类编码。</li>
+</ul>
+
+<h2>spring sweep 工作流</h2>
+<ul>
+<li><code>run_spring_sweep(baseCase, sweepDef, options)</code></li>
+<li><code>build_spring_sweep_cases(baseCase, sweepDef)</code></li>
+<li><code>plot_spring_sweep_map(sweepOut, mode, options)</code></li>
+<li><code>demo_spring_sweep_map()</code></li>
+</ul>
+<p>扫参方式是前轴左右同值修改 <code>sus.ks(1:2)</code>，后轴左右同值修改 <code>sus.ks(3:4)</code>。这只是批处理筛选层增强，不是新求解器。</p>
+
+<h2>bump-adjusted 语义</h2>
+<p>本版本 bump 功能只是在准静态 <code>hDynamicAll</code> 上做保守扣减：</p>
+<ul>
+<li>前部点减 <code>reserveFront</code></li>
+<li>后部点减 <code>reserveRear</code></li>
+<li>中性点减 <code>max(reserveFront, reserveRear)</code></li>
+</ul>
+<p>新增结果包括 <code>hDynamicAllBumpAdjusted</code>、<code>hDynamicMinBumpAdjusted</code>、<code>dynamicClearanceBumpAdjustedPass</code> 与 <code>bumpAdjustedClearanceViolation</code>。</p>
+
+<div class="note">
+<p><strong>物理边界：</strong> 这不是完整瞬态 bump 模型，不新增自由度、不解时域动力学、不包含 tire load sensitivity 或 bicycle transient。</p>
+</div>
+
+<h2>map class code</h2>
+<ul>
+<li><code>0 = All Cases Fail</code></li>
+<li><code>1 = Only Aero Passes</code></li>
+<li><code>2 = Only Scrape Passes</code></li>
+<li><code>3 = Both Cases Pass</code></li>
+</ul>
+
+<h2>新增测试</h2>
+<ul>
+<li><code>test_aero_platform_pass_definition</code></li>
+<li><code>test_scrape_pass_quasi_static_definition</code></li>
+<li><code>test_bump_adjusted_clearance_split</code></li>
+<li><code>test_bump_adjusted_scrape_can_fail_when_quasi_static_pass</code></li>
+<li><code>test_spring_sweep_classification_codes</code></li>
+<li><code>test_run_batch_summary_fields_v104</code></li>
+<li><code>test_demo_spring_sweep_map_runs</code></li>
+<li><code>test_bump_adjust_input_expansion</code></li>
+</ul>
+
+<p>详细字段和迁移说明见同目录下的 Markdown 文档：<code>FS_Platform_Model_Handover_V1.0_to_V1.0.4.md</code>。</p>
+</body>
+</html>

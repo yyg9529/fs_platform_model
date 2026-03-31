@@ -1,0 +1,37 @@
+﻿{\rtf1\ansi\deff0
+{\fonttbl{\f0 Segoe UI;}}
+\fs22
+\b FS Platform Model Handover V1.0.4 Pre-V1.5 Interface Cleanup \b0\par
+\par
+\b Positioning \b0\par
+This document records the pre-V1.5 interface-cleanup revision on top of the current V1.0.4 baseline. It does not rebuild the project and does not introduce V1.5 tire proxy logic.\par
+\par
+\b Core Conclusions \b0\par
+1. Standard cases now provide active fields explicitly instead of relying on autofill warnings.\par
+2. Formal tire inputs are unified under tire.mode, ktFront, ktRear, ktFrontRange, and ktRearRange.\par
+3. sus.kt remains only as a backward-compatibility path.\par
+4. Baseline, target, and demo cases no longer emit Auto-filled missing fields or sus.kt deprecated warnings during normal runs.\par
+5. shock/wheel consistency warning is retained for abnormal cases, but standard cases should remain clean.\par
+\par
+\b Main Files Updated \b0\par
+config/build_case_2025_baseline.m\par
+config/build_case_2026_target.m\par
+core/validate_case_struct.m\par
+core/preprocess_case.m\par
+main/demo_case_2026.m\par
+main/demo_spring_sweep_map.m\par
+utils/build_spring_sweep_cases.m\par
+README.md\par
+\par
+\b Added Tests \b0\par
+test_standard_case_no_autofill_warning\par
+test_standard_case_no_sus_kt_deprecated_warning\par
+test_standard_case_no_shock_wheel_consistency_warning\par
+test_demo_case_no_interface_cleanup_warning\par
+\par
+\b Verification \b0\par
+All retained V1.0.4 regression tests passed. The four new interface-cleanup tests passed. checkcode returned TOTAL_CHECKCODE_MESSAGES=0.\par
+\par
+\b Next Step Guidance \b0\par
+If the next thread enters V1.5, keep tire.* as the formal input path and keep compatibility warnings as legacy-only support.\par
+}

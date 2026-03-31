@@ -1,0 +1,34 @@
+﻿{\rtf1\ansi\deff0
+{\fonttbl{\f0 Segoe UI;}}
+\f0\fs22
+FS Platform Model Handover V1.0.3a\par
+\par
+1. Key changes\par
+- Split static clearance and dynamic clearance\par
+- Rules layer uses static clearance only\par
+- Targets layer uses dynamic clearance only\par
+- Effective travel is now used in rule checks\par
+- Range mode keeps results.inputs as preprocessed primary scenario and adds inputsRaw / inputsNominal\par
+- validation.warnings are emitted via warning(...) when warnOnDeprecatedInput=true\par
+- run_batch summary adds static/dynamic clearance and effective travel fields\par
+\par
+2. Core semantics\par
+- deltaSuspWheel = Fmain ./ kw\par
+- deltaTire = Fmain ./ kt\par
+- deltaGround = deltaSuspWheel + deltaTire\par
+- shockStroke = mr .* deltaSuspWheel\par
+\par
+3. Clearance outputs\par
+- results.clearance.hStaticAll / hStaticMin / hStaticMinName\par
+- results.clearance.hDynamicAll / hDynamicMin / hDynamicMinName\par
+- hAll / hMin / hMinName remain as dynamic aliases\par
+\par
+4. Effective travel\par
+- effectiveJounce = min(jounceMax, wheelJounceFromShock)\par
+- effectiveDroop = min(droopMax, wheelDroopFromShock)\par
+- effectiveTotalTravel = effectiveJounce + effectiveDroop\par
+\par
+5. Verification on 2026-03-20\par
+- New V1.0.3a tests all passed\par
+- MATLAB must be run outside sandbox because sandbox startup reports File system inconsistency\par
+}
