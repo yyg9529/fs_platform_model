@@ -23,7 +23,7 @@ mainDir = fileparts(thisFile);
 rootDir = fileparts(mainDir);
 addpath(genpath(rootDir));
 
-caseDef = build_test_tire_proxy_case();
+caseDef = build_demo_tire_proxy_case();
 caseDef.meta.name = 'Demo_V15_Pure_Lateral';
 caseDef.tireOp.mode = 'direct';
 caseDef.tireOp.alpha = 0.0;

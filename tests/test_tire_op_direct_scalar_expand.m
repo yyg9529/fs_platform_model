@@ -12,7 +12,8 @@ caseDef.tireOp.mode = 'direct';
 caseDef.tireOp.alpha = 5.0;
 caseDef.tireOp.kappa = 0.03;
 caseDef.tireOp.gamma = -2.0;
-caseDef.tireOp.pressure = 90000;
+caseDef.tireOp.pressure = 83;
+caseDef.tireOp.pressureUnit = 'kPa';
 caseDef.tireOp.alphaUnit = 'deg';
 caseDef.tireOp.gammaUnit = 'deg';
 
@@ -23,7 +24,8 @@ assert(isequal(size(op.alpha), [4, 1]), 'Expected [4x1] alpha.');
 assert(max(abs(op.alpha - deg2rad(5.0))) < 1e-12, 'Expected scalar alpha expansion.');
 assert(max(abs(op.kappa - 0.03)) < 1e-12, 'Expected scalar kappa expansion.');
 assert(max(abs(op.gamma - deg2rad(-2.0))) < 1e-12, 'Expected scalar gamma expansion.');
-assert(max(abs(op.pressure - 90000)) < 1e-12, 'Expected scalar pressure expansion.');
+assert(max(abs(op.pressure - 83000)) < 1e-12, ...
+    'Expected scalar pressure expansion and kPa-to-Pa normalization.');
 
 fprintf('[PASS] test_tire_op_direct_scalar_expand\n');
 end

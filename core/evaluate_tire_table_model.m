@@ -80,6 +80,7 @@ FxCapUsed = nan(nCorner, 1);
 FyCapUsed = nan(nCorner, 1);
 utilization = nan(nCorner, 1);
 utilizationDemand = nan(nCorner, 1);
+constraintValue = nan(nCorner, 1);
 peakMargin = nan(nCorner, 1);
 usedCombinedProxy = false(nCorner, 1);
 usedCombinedTable = false(nCorner, 1);
@@ -151,6 +152,7 @@ for i = 1:nCorner
         Fy(i) = FyPure;
         Mz(i) = MzPure;
         utilizationDemand(i) = abs(FyPure) / FyCap;
+        constraintValue(i) = utilizationDemand(i) .^ forceModel.combinedProxy.exponent;
         utilization(i) = min(utilizationDemand(i), 1.0);
         peakMargin(i) = 1.0 - utilizationDemand(i);
 
@@ -160,6 +162,7 @@ for i = 1:nCorner
         Fy(i) = FyPure;
         Mz(i) = MzPure;
         utilizationDemand(i) = abs(FxPure) / FxCap;
+        constraintValue(i) = utilizationDemand(i) .^ forceModel.combinedProxy.exponent;
         utilization(i) = min(utilizationDemand(i), 1.0);
         peakMargin(i) = 1.0 - utilizationDemand(i);
 
@@ -190,10 +193,11 @@ for i = 1:nCorner
             Fx(i) = FxComb;
             Fy(i) = FyComb;
             Mz(i) = MzComb;
-            utilizationDemand(i) = (abs(FxComb) / FxCap) .^ forceModel.combinedProxy.exponent + ...
+            constraintValue(i) = (abs(FxComb) / FxCap) .^ forceModel.combinedProxy.exponent + ...
                 (abs(FyComb) / FyCap) .^ forceModel.combinedProxy.exponent;
+            utilizationDemand(i) = constraintValue(i) .^ (1.0 / forceModel.combinedProxy.exponent);
             utilization(i) = min(utilizationDemand(i), 1.0);
-            peakMargin(i) = 1.0 - utilizationDemand(i) .^ (1.0 / forceModel.combinedProxy.exponent);
+            peakMargin(i) = 1.0 - utilizationDemand(i);
 
         else
             switch combinedMode
@@ -210,6 +214,7 @@ for i = 1:nCorner
                     Mz(i) = MzPure * proxy.scale;
                     utilization(i) = proxy.utilization;
                     utilizationDemand(i) = proxy.utilizationDemand;
+                    constraintValue(i) = proxy.constraintValue;
                     peakMargin(i) = proxy.peakMargin;
 
                 case 'pure_tables'
@@ -243,6 +248,7 @@ evalOut.FxCap = FxCapUsed;
 evalOut.FyCap = FyCapUsed;
 evalOut.utilization = utilization;
 evalOut.utilizationDemand = utilizationDemand;
+evalOut.constraintValue = constraintValue;
 evalOut.peakMargin = peakMargin;
 evalOut.usedCombinedProxy = usedCombinedProxy;
 evalOut.usedCombinedTable = usedCombinedTable;
@@ -300,7 +306,7 @@ for i = 1:nScan
     Mz(:, i) = evalI.Mz;
     muX(:, i) = evalI.Fx ./ max(evalI.Fz, eps);
     muY(:, i) = evalI.Fy ./ max(evalI.Fz, eps);
-    utilization(:, i) = evalI.utilization;
+    utilization(:, i) = evalI.utilizationDemand;
     peakMargin(:, i) = evalI.peakMargin;
     FyFrontTotal(i) = sum(evalI.Fy(1:2), 'omitnan');
     FyRearTotal(i) = sum(evalI.Fy(3:4), 'omitnan');

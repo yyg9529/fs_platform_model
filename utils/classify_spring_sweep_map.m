@@ -1,65 +1,49 @@
-﻿function classOut = classify_spring_sweep_map(aeroPlatformPass, scrapePass)
-%CLASSIFY_SPRING_SWEEP_MAP 统一生成 spring sweep 四色分类编码、标签与颜色。
-% 功能说明:
-%   基于 aero 平台通过与 scrape 通过两个布尔输入，生成统一的四色分类：
-%   0 = All Cases Fail
-%   1 = Only Aero Passes
-%   2 = Only Scrape Passes
-%   3 = Both Cases Pass
-%   本函数既可用于单点结果，也可用于 sweep 网格或 summary 向量。
-%
-% 输入:
-%   aeroPlatformPass - 逻辑标量/数组，表示气动平台是否通过
-%   scrapePass       - 逻辑标量/数组，表示 scrape 判据是否通过
-%
-% 输出:
-%   classOut - 分类结果结构体：
-%              .classCode  数值编码
-%              .classLabel 字符串标签
-%              .colorArray [N x 3] 或 [1 x 3] 颜色数组
-%              .colorGrid  [size(classCode) 3] 颜色网格
-%              .palette    [4 x 3] 固定颜色表
-%              .labels     [4 x 1] 固定标签表
-%
-% 关键物理假设:
-%   1) aeroPlatformPass 与 scrapePass 已由上游定义好，不在本函数中二次解释。
-%   2) 颜色映射固定，避免图与表之间颜色漂移。
-%
-% 单位约定:
-%   无量纲逻辑与分类编码；颜色为 RGB 三元组 [0,1]
+function classOut = classify_spring_sweep_map(aeroPlatformPass, scrapePass, validMask)
+%CLASSIFY_SPRING_SWEEP_MAP Build spring-sweep pass classes.
+% Codes for evaluated points are 0=both fail, 1=aero only, 2=scrape only,
+% and 3=both pass. Invalid/non-converged points use -1=Not Evaluated.
 
 if ~isequal(size(aeroPlatformPass), size(scrapePass))
     error('classify_spring_sweep_map:SizeMismatch', ...
         'aeroPlatformPass and scrapePass must have the same size.');
 end
+if nargin < 3
+    validMask = true(size(aeroPlatformPass));
+elseif ~isequal(size(validMask), size(aeroPlatformPass))
+    error('classify_spring_sweep_map:ValiditySizeMismatch', ...
+        'validMask must have the same size as the pass arrays.');
+end
 
 aeroPlatformPass = logical(aeroPlatformPass);
 scrapePass = logical(scrapePass);
+validMask = logical(validMask);
 
 palette = [ ...
-    0.55, 0.55, 0.55; ... % 0 All Cases Fail
-    0.16, 0.42, 0.78; ... % 1 Only Aero Passes
-    0.90, 0.56, 0.12; ... % 2 Only Scrape Passes
-    0.15, 0.62, 0.28  ... % 3 Both Cases Pass
-    ];
+    0.55, 0.55, 0.55; ...
+    0.16, 0.42, 0.78; ...
+    0.90, 0.56, 0.12; ...
+    0.15, 0.62, 0.28];
 labels = [ ...
     "All Cases Fail"; ...
     "Only Aero Passes"; ...
     "Only Scrape Passes"; ...
-    "Both Cases Pass" ...
-    ];
+    "Both Cases Pass"];
+invalidColor = [0.25, 0.25, 0.25];
 
 classCode = zeros(size(aeroPlatformPass));
-classCode(aeroPlatformPass & ~scrapePass) = 1;
-classCode(~aeroPlatformPass & scrapePass) = 2;
-classCode(aeroPlatformPass & scrapePass) = 3;
+classCode(~validMask) = -1;
+classCode(validMask & aeroPlatformPass & ~scrapePass) = 1;
+classCode(validMask & ~aeroPlatformPass & scrapePass) = 2;
+classCode(validMask & aeroPlatformPass & scrapePass) = 3;
 
-labelLinear = strings(numel(classCode), 1);
-colorArray = zeros(numel(classCode), 3);
+labelLinear = repmat("Not Evaluated", numel(classCode), 1);
+colorArray = repmat(invalidColor, numel(classCode), 1);
 for i = 1:numel(classCode)
-    idx = classCode(i) + 1;
-    labelLinear(i) = labels(idx);
-    colorArray(i, :) = palette(idx, :);
+    if classCode(i) >= 0
+        idx = classCode(i) + 1;
+        labelLinear(i) = labels(idx);
+        colorArray(i, :) = palette(idx, :);
+    end
 end
 
 classLabel = reshape(labelLinear, size(classCode));
@@ -75,4 +59,5 @@ classOut.colorArray = colorArray;
 classOut.colorGrid = colorGrid;
 classOut.palette = palette;
 classOut.labels = labels;
+classOut.invalidColor = invalidColor;
 end

@@ -47,7 +47,7 @@ for iRear = 1:nRear
         caseI = baseCase;
         caseI.sus.ks(1:2) = frontSpringValues(iFront);
         caseI.sus.ks(3:4) = rearSpringValues(iRear);
-        caseI.sus.kw = caseI.sus.ks .* (caseI.sus.mr .^ 2);
+        caseI.sus.kw = [];
         caseI.meta.name = sprintf('%s__kf_%g__kr_%g', baseCase.meta.name, ...
             frontSpringValues(iFront), rearSpringValues(iRear));
         caseI.meta.notes = sprintf('%s | V1.0.4 spring sweep front=%.6g N/m rear=%.6g N/m', ...

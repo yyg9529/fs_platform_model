@@ -2,15 +2,17 @@
 
 ## 版本定位
 本项目是连续升级，不是重建工程。
-当前版本为 `V1.0.4`，它仍然是：
+当前代码版本为 `V1.5 + 2026-09-04 theory/code review patch`，它仍然是：
 - 三自由度准静态悬架-气动平台模型
 - 状态定义 `q = [z; theta; phi]`
 - 单点主入口 `results = run_case(caseDef, options)`
 - 批量入口 `batchOut = run_batch(caseArray, options)`
 
-`V1.0.4` 的定位不是进入 `V1.5` 或 `V2.0`，而是在 `V1.0.3a` 基础上补齐两层高价值增强：
-1. 前后弹簧二维扫参的 pass/fail map
-2. 基于准静态 dynamic clearance 的 bump-adjusted scrape robustness map
+完整理论推导、公开来源、缺陷清单、修正证据和剩余 `NOT READY` 项见：
+
+- [`docs/FS_Platform_Model_Theory_and_Code_Review_2026-09-04.md`](docs/FS_Platform_Model_Theory_and_Code_Review_2026-09-04.md)
+
+当前状态必须分层理解：代码与准静态代数闭合已验证；随仓库提供的气动/轮胎数据仍是 synthetic/demo，且模型尚未完成 sprung/unsprung 质量分离和直接载荷路径—轮胎柔度统一耦合，因此不是整车工程签署模型。
 
 ## 版本演化关系
 1. `V1.0`
@@ -39,7 +41,7 @@
 - 修正 range 模式的 `results.inputs / inputsRaw / inputsNominal`
 - `validation.warnings` 可真实发射为 `warning(...)`
 
-6. `V1.0.4`（当前）
+6. `V1.0.4`（历史）
 - 新增 spring sweep case 生成、批处理与四色分类 map
 - 新增 `aeroPlatformPass / scrapePassQuasiStatic / scrapePassBumpAdjusted`
 - 新增基于 clearance 点位置的 `bumpAdjust.reserveFront / reserveRear` 保守扣减
@@ -52,10 +54,11 @@
 - baseline / target / demo 正常运行时不应再出现 autofill / `sus.kt` deprecated warning
 
 ## 明确边界
-`V1.0.4` 仍然不是：
+当前 `V1.5` 仍然不是：
 - 完整瞬态 ride / bump 动力学模型
-- `V1.5` 的 tire load sensitivity / grip proxy 平台
 - `V2.0` 的 transient bicycle / turn-in / exit balance 模型
+- 真实轮胎/气动数据已经标定的工程签署平台
+- `man.ax/ay` 与轮胎 `alpha/kappa` 闭环耦合求解器
 
 本版本 bump 功能只用于：
 - 在准静态 dynamic clearance 结果上叠加保守附加扣减
@@ -73,10 +76,11 @@
 - `z > 0`：车身下沉
 - `theta > 0`：车头下俯
 - `phi > 0`：车身向右侧倾
+- 几何坐标 `y > 0` 向右；`man.ay` 是有符号转弯工况量，不是 Cartesian `+y` 加速度分量：`man.ay > 0` 表示左转，因此 `ayCartesian = -man.ay`，并产生右侧压缩/右轮增载
 
 ### 刚度链路
-- `mr = spring / wheel`
-- `kw = ks * mr^2`：悬架侧轮端刚度
+- `mr = dx_spring / dx_wheel`（局部微分 installation ratio）
+- `kw = ks * mr^2`：仅在所分析行程内 `mr` 可视为常数时成立；变 motion ratio 的严格切线刚度还包含预载相关项
 - `keq` 由 `tire.mode` 决定：
   - `off`：`keq = kw`
   - `fixed / range`：`keq = kw * kt / (kw + kt)`
@@ -147,6 +151,7 @@
 正式定义：
 ```matlab
 aeroPlatformPass = ...
+    results.flags.classificationValid && ...
     results.targets.aeroLossPass && ...
     results.targets.frontShareMigrationPass;
 ```
@@ -160,6 +165,7 @@ aeroPlatformPass = ...
 正式定义：
 ```matlab
 scrapePassQuasiStatic = ...
+    results.flags.analysisReady && ...
     results.rules.staticGroundClearancePass && ...
     results.targets.dynamicClearancePass && ...
     ~results.flags.clearanceViolation;
@@ -182,6 +188,7 @@ scrapePassQuasiStatic = ...
 正式定义：
 ```matlab
 scrapePassBumpAdjusted = ...
+    results.flags.analysisReady && ...
     results.rules.staticGroundClearancePass && ...
     results.clearance.dynamicClearanceBumpAdjustedPass && ...
     ~results.flags.bumpAdjustedClearanceViolation;
@@ -192,23 +199,29 @@ scrapePassBumpAdjusted = ...
 - bump-adjusted pass 与 quasi-static pass 并存
 - bump-adjusted 结果不会覆盖原始 dynamic clearance
 
-### feasible 分层
-继续保持：
-- `converged`
-- `rulePass`
-- `designPass`
-- `feasible`
+### 结果状态分层
+- `converged`：主平衡方程满足缩放残差收敛判据。
+- `analysisReady`：所有已启用计算层的数值与适用域有效，可以继续分析；它不表示规则、设计目标或工程证据已经通过。
+- `classificationValid`：当前点具备 aero/scrape map 分类所需的收敛解、有效气动状态、完整参考和接地状态。
+- `rulePass / designPass`：分别表示启用的赛规约束和项目设计目标是否通过。
+- `platformFeasible`：平台准静态求解、规则/目标、行程/离地和接地门禁均通过。
+- `feasible`：为兼容既有调用保留，等价于 `platformFeasible`；它不是整车工程签署结论。
+- `engineeringReady`：工程签署总门禁。当前模型仍缺少真实气动/轮胎数据、sprung/unsprung 质量分离以及直接载荷路径与轮胎柔度统一耦合，因此模型级固定为 `false`。
+
+只有 `analysisReady=true` 才能解释数值结果；只有 `platformFeasible=true` 才能称平台方案通过当前约束；不得把这两个状态替代 `engineeringReady`。
 
 ## V1.0.4 新增 map 分类
-### quasi-static 四色分类
+### quasi-static 四类通过状态与无效状态
 `mapClassQuasiStatic`
+- `-1 = Not Evaluated`（深灰；当前点不具备有效分类条件）
 - `0 = All Cases Fail`
 - `1 = Only Aero Passes`
 - `2 = Only Scrape Passes`
 - `3 = Both Cases Pass`
 
-### bump-adjusted 四色分类
+### bump-adjusted 四类通过状态与无效状态
 `mapClassBumpAdjusted`
+- `-1 = Not Evaluated`（深灰；当前点不具备有效分类条件）
 - `0 = All Cases Fail`
 - `1 = Only Aero Passes`
 - `2 = Only Scrape Passes`
@@ -218,6 +231,7 @@ scrapePassBumpAdjusted = ...
 - aero 侧统一使用 `aeroPlatformPass`
 - quasi-static 图的 scrape 侧使用 `scrapePassQuasiStatic`
 - bump-adjusted 图的 scrape 侧使用 `scrapePassBumpAdjusted`
+- `classificationValid=false` 时必须输出 `-1 / Not Evaluated`，不能归入通过或失败四类。
 
 ## spring sweep 工作流
 ### 新增函数
@@ -330,38 +344,10 @@ demo_spring_sweep_map;
 ## 运行 Tests
 ```matlab
 addpath(genpath('E:\JX Areo adaption\fs_platform_model'));
-
-% 基础回归
-test_zero_speed_zero_load;
-test_static_symmetry;
-test_roll_gradient_linear_case;
-test_pitch_under_braking;
-
-% V1.0.3 / V1.0.3a
-test_delta_decomposition_consistency;
-test_shock_stroke_from_susp_wheel;
-test_rule_checks;
-test_shock_wheel_consistency_warning;
-test_tire_mode_off_fixed_range;
-test_aero_map_flags;
-test_static_dynamic_clearance_split;
-test_static_clearance_rule_uses_static_values;
-test_effective_travel_rule_check;
-test_effective_jounce_rule_check;
-test_range_results_inputs_consistency;
-test_validation_warnings_emit;
-test_run_batch_summary_fields_v103a;
-
-% V1.0.4
-test_aero_platform_pass_definition;
-test_scrape_pass_quasi_static_definition;
-test_bump_adjusted_clearance_split;
-test_bump_adjusted_scrape_can_fail_when_quasi_static_pass;
-test_spring_sweep_classification_codes;
-test_run_batch_summary_fields_v104;
-test_bump_adjust_input_expansion;
-test_demo_spring_sweep_map_runs;
+summary = run_all_tests();
 ```
+
+`run_all_tests` 会先运行 MATLAB 可发现的契约测试，并对“发现 0 项”或任一失败硬失败；随后执行全部 legacy `test_*.m` 回归入口。
 
 ## Deprecated 字段策略
 以下字段仍可读取，但只保留兼容，不再参与主求解：
@@ -423,7 +409,10 @@ test_demo_spring_sweep_map_runs;
 
 ### combined proxy 说明
 - 当没有 combined 表时，程序会基于 pure Fy/Fx 表和显式 `combinedProxy` 参数进行近似折减
+- 当前唯一实现并允许的 `combinedProxy.type` 是 `friction_ellipse`
+- 统一定义 `utilization = constraintValue^(1/exponent)`，同时保留 requested/clipped/constraintValue
 - 当前近似本质是工程筛选层代理，不等价于完整 Magic Formula combined-slip
+- 当前表 schema 没有胎压维度；压力扫描或偏离 source reference pressure 的查询会被拒绝
 
 ### V1.5 结果结构
 - `results.tire.forceModel`

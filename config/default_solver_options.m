@@ -17,7 +17,7 @@
 %
 % 单位约定:
 %   initialGuess = [z; theta; phi]，其中 z[m], theta/phi[rad]
-%   tol 作用于残差范数（广义力组合）
+%   tol 作用于无量纲缩放残差范数（力、俯仰力矩、侧倾力矩分别归一化）
 
 solver = struct();
 solver.tol = 1e-7;

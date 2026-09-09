@@ -39,17 +39,48 @@ dynamicClearance = calc_clearance_points(caseDef, q);
 bumpAdjustedClearance = calc_bump_adjusted_clearance(caseDef, dynamicClearance);
 
 FzStatic = caseDef.derived.FzStatic(:);
-FzTotal = FzStatic + corner.Ftotal(:);
+loadComp = calc_corner_load_components(caseDef, q, ctx.loads, corner);
+FzDynamic = loadComp.FzDynamic;
+FzTotal = FzStatic + FzDynamic;
 FzAxleFront = sum(FzTotal(1:2));
 FzAxleRear = sum(FzTotal(3:4));
+contactLostAny = any(FzTotal <= 0);
 
-[FzNominal, frontShareNominal] = aero_nominal_reference(caseDef.aero.nominalRef, caseDef.man.V);
-if FzNominal > 1e-9
+[FzNominal, frontShareNominal, nominalValidity] = ...
+    aero_nominal_reference(caseDef.aero.nominalRef, caseDef.man.V);
+aeroLossCriterionDefined = ~isempty(caseDef.targets.maxAeroLossPct);
+balanceCriterionDefined = ~isempty(caseDef.targets.maxFrontShareMigrationPct);
+aeroCriteriaDefined = aeroLossCriterionDefined || balanceCriterionDefined;
+atEvaluationSpeed = abs(caseDef.man.V) > 1e-9;
+aeroLossEvaluable = aeroLossCriterionDefined && atEvaluationSpeed && ...
+    nominalValidity.fzValid && FzNominal > 1e-9;
+balanceEvaluable = balanceCriterionDefined && atEvaluationSpeed && ...
+    nominalValidity.frontShareValid;
+nominalReferenceValid = aeroCriteriaDefined && ...
+    (~aeroLossCriterionDefined || aeroLossEvaluable) && ...
+    (~balanceCriterionDefined || balanceEvaluable);
+if nominalValidity.fzValid && FzNominal > 1e-9
     lossPct = 100 * (1 - aero.Fz / FzNominal);
-else
+elseif nominalValidity.fzValid && abs(caseDef.man.V) <= 1e-9
     lossPct = 0.0;
+else
+    lossPct = nan;
 end
-balanceMigrationPct = 100 * (aero.frontShare - frontShareNominal);
+if nominalValidity.frontShareValid
+    balanceMigrationPct = 100 * (aero.frontShare - frontShareNominal);
+else
+    balanceMigrationPct = nan;
+end
+aeroConsistency = assess_aero_reference_consistency(caseDef, FzNominal);
+
+mapClampedAny = isfield(aero, 'mapClampedAny') && logical(aero.mapClampedAny);
+interpFallbackUsed = isfield(aero, 'interpFallbackUsed') && logical(aero.interpFallbackUsed);
+aeroOutputsFinite = all(isfinite([aero.Cz, aero.Cd, aero.Fz, aero.Drag, aero.frontShare]));
+mapValidityRequired = abs(caseDef.man.V) > 1e-9;
+aeroStateValid = aeroOutputsFinite && (~mapValidityRequired || ~(mapClampedAny || interpFallbackUsed));
+converged = logical(solveOut.converged);
+analysisReady = converged && aeroStateValid && ~contactLostAny;
+classificationValid = analysisReady && aeroCriteriaDefined && nominalReferenceValid;
 
 theta_deg = rad2deg_safe(q(2));
 phi_deg = rad2deg_safe(q(3));
@@ -188,6 +219,14 @@ dynamicClearancePassRaw = dynamicClearanceMargin >= 0;
 [aeroLossPassRaw, aeroLossMargin] = optional_limit_pass(lossPct, caseDef.targets.maxAeroLossPct);
 [frontShareMigrationPassRaw, frontShareMigrationMargin] = ...
     optional_limit_pass(abs(balanceMigrationPct), caseDef.targets.maxFrontShareMigrationPct);
+if aeroLossCriterionDefined && ~aeroLossEvaluable
+    aeroLossPassRaw = false;
+    aeroLossMargin = nan;
+end
+if balanceCriterionDefined && ~balanceEvaluable
+    frontShareMigrationPassRaw = false;
+    frontShareMigrationMargin = nan;
+end
 
 designPassRaw = dynamicClearancePassRaw && pitchPassRaw && rollPassRaw && ...
     aeroLossPassRaw && frontShareMigrationPassRaw;
@@ -198,24 +237,25 @@ else
     designPass = true;
 end
 
-% ===== V1.0.4 筛选层 pass 定义 =====
-aeroPlatformPass = aeroLossPassRaw && frontShareMigrationPassRaw;
-scrapePassQuasiStatic = staticGroundClearancePassRaw && dynamicClearancePassRaw && ~clearanceViolation;
-scrapePassBumpAdjusted = staticGroundClearancePassRaw && ...
+% ===== 筛选层 pass 定义 =====
+aeroPlatformPassRaw = aeroLossPassRaw && frontShareMigrationPassRaw;
+aeroPlatformPass = classificationValid && aeroPlatformPassRaw;
+scrapePassQuasiStatic = analysisReady && ...
+    staticGroundClearancePassRaw && dynamicClearancePassRaw && ~clearanceViolation;
+scrapePassBumpAdjusted = analysisReady && staticGroundClearancePassRaw && ...
     bumpAdjustedClearance.dynamicPass && ~bumpAdjustedClearanceViolation;
 
-classQuasiStatic = classify_spring_sweep_map(aeroPlatformPass, scrapePassQuasiStatic);
-classBumpAdjusted = classify_spring_sweep_map(aeroPlatformPass, scrapePassBumpAdjusted);
+classQuasiStatic = classify_spring_sweep_map(aeroPlatformPass, scrapePassQuasiStatic, classificationValid);
+classBumpAdjusted = classify_spring_sweep_map(aeroPlatformPass, scrapePassBumpAdjusted, classificationValid);
 
 % ===== converged / feasible 分层 =====
-converged = logical(solveOut.converged);
 if logical(caseDef.solver.strictTravelViolation)
     travelGate = ~travelViolationAny && ~clearanceViolation;
 else
     travelGate = true;
 end
 
-feasible = converged && rulePass && designPass && travelGate;
+feasible = analysisReady && rulePass && designPass && travelGate;
 
 results = struct();
 
@@ -250,17 +290,46 @@ results.aero.FzRear = aero.FzRear;
 results.aero.lossPct = lossPct;
 results.aero.balanceMigrationPct = balanceMigrationPct;
 results.aero.frontShareMigrationPct = balanceMigrationPct; % 兼容字段
-results.aero.mapClampedAny = isfield(aero,'mapClampedAny') && logical(aero.mapClampedAny);
+results.aero.nominalReferenceValid = nominalReferenceValid;
+results.aero.nominalReference = nominalValidity;
+results.aero.criteriaDefined = aeroCriteriaDefined;
+results.aero.aeroLossCriterionDefined = aeroLossCriterionDefined;
+results.aero.balanceCriterionDefined = balanceCriterionDefined;
+results.aero.aeroLossEvaluable = aeroLossEvaluable;
+results.aero.balanceEvaluable = balanceEvaluable;
+results.aero.stateValid = aeroStateValid;
+results.aero.evaluationValid = classificationValid;
+results.aero.maxMapFzAtSpeed = aeroConsistency.maxMapFzAtSpeed;
+results.aero.minimumPossibleLossPct = aeroConsistency.minimumPossibleLossPct;
+results.aero.targetLossReachableWithMap = aeroConsistency.targetLossReachableWithMap;
+results.aero.mapClampedAny = mapClampedAny;
 results.aero.hfClamped = isfield(aero,'hfClamped') && logical(aero.hfClamped);
 results.aero.hrClamped = isfield(aero,'hrClamped') && logical(aero.hrClamped);
 results.aero.phiClamped = isfield(aero,'phiClamped') && logical(aero.phiClamped);
 results.aero.betaClamped = isfield(aero,'betaClamped') && logical(aero.betaClamped);
-results.aero.interpFallbackUsed = isfield(aero,'interpFallbackUsed') && logical(aero.interpFallbackUsed);
+results.aero.interpFallbackUsed = interpFallbackUsed;
+results.aero.evidenceStatus = char(string(caseDef.aero.evidenceStatus));
+results.aero.mapSource = char(string(caseDef.aero.mapSource));
+results.aero.nominalSource = char(string(caseDef.aero.nominalSource));
+results.aero.mapLoadStatus = char(string(caseDef.aero.mapLoadStatus));
+results.aero.mapLoadMessage = char(string(caseDef.aero.mapLoadMessage));
+results.aero.nominalLoadStatus = char(string(caseDef.aero.nominalLoadStatus));
+results.aero.nominalLoadMessage = char(string(caseDef.aero.nominalLoadMessage));
+healthyLoadStates = {'loaded', 'provided_inline', 'not_applicable'};
+results.aero.dataLoadHealthy = any(strcmpi(results.aero.mapLoadStatus, healthyLoadStates)) && ...
+    any(strcmpi(results.aero.nominalLoadStatus, healthyLoadStates));
+results.aero.engineeringEvidenceReady = strcmpi(results.aero.evidenceStatus, 'validated') && ...
+    results.aero.dataLoadHealthy;
 
 results.loads = struct();
 results.loads.Qext = Qext;
 results.loads.Mpitch = ctx.loads.Mpitch;
 results.loads.Mroll = ctx.loads.Mroll;
+results.loads.pitch = ctx.loads.pitch;
+results.loads.roll = ctx.loads.roll;
+results.loads.ayTurn = caseDef.man.ay;
+results.loads.ayCartesian = -caseDef.man.ay;
+results.loads.ayConvention = 'positive_left_turn_y_axis_positive_right';
 results.loads.FzAxleFront = FzAxleFront;
 results.loads.FzAxleRear = FzAxleRear;
 
@@ -301,6 +370,8 @@ results.tire.forces = struct( ...
     'FxRequested', nan(4,1), 'FyRequested', nan(4,1), ...
     'FxCap', nan(4,1), 'FyCap', nan(4,1));
 results.tire.coeff = struct('muX', nan(4,1), 'muY', nan(4,1), 'maxAbsMuX', nan, 'maxAbsMuY', nan);
+results.tire.utilization = struct( ...
+    'requested', nan(4,1), 'clipped', nan(4,1), 'constraintValue', nan(4,1));
 results.tire.balance = struct( ...
     'FyFrontTotal', nan, 'FyRearTotal', nan, ...
     'FxFrontTotal', nan, 'FxRearTotal', nan, ...
@@ -315,7 +386,7 @@ results.tire.validity = struct( ...
     'validKappa', false(4,1), 'validGamma', false(4,1), ...
     'outOfRange', false(4,1), 'outOfRangeAny', false, ...
     'contactLost', false(4,1), 'contactLostAny', false, ...
-    'evalFailed', false, 'wasClipped', false(4,1));
+    'evalFailed', false, 'evaluationSkipped', false, 'wasClipped', false(4,1));
 results.tire.scan = struct( ...
     'enable', false, 'field', '', 'applyMode', '', 'unit', '', ...
     'valuesRaw', zeros(0,1), 'valuesSI', zeros(0,1), ...
@@ -354,6 +425,11 @@ results.corners.shockReboundUsagePct = shockReboundUsagePct;
 results.corners.Ftotal = corner.Ftotal;
 results.corners.Fmain = corner.Fmain;
 results.corners.FzStatic = FzStatic;
+results.corners.FzElasticSpring = loadComp.FzElasticSpring;
+results.corners.FzAntiRollBar = loadComp.FzAntiRollBar;
+results.corners.FzRollCenterGeometric = loadComp.FzRollCenterGeometric;
+results.corners.FzAntiPitchGeometric = loadComp.FzAntiPitchGeometric;
+results.corners.FzDynamic = FzDynamic;
 results.corners.FzTotal = FzTotal;
 % FzWheel 是 V1.5 轮胎代理层正式使用的角点法向载荷输入，来源必须是平台收敛结果。
 results.corners.FzWheel = FzTotal;
@@ -401,6 +477,12 @@ results.platform.hr = aero.hr;
 
 results.rules = struct();
 results.rules.ruleSet = caseDef.rules.ruleSet;
+results.rules.staticGroundClearanceSource = caseDef.rules.staticGroundClearanceSource;
+results.rules.staticGroundClearanceClause = caseDef.rules.staticGroundClearanceClause;
+results.rules.staticGroundClearanceEvidenceStatus = caseDef.rules.staticGroundClearanceEvidenceStatus;
+results.rules.travelConstraintSource = caseDef.rules.travelConstraintSource;
+results.rules.travelConstraintClause = caseDef.rules.travelConstraintClause;
+results.rules.travelEvidenceStatus = caseDef.rules.travelEvidenceStatus;
 results.rules.enforceRules = logical(caseDef.rules.enforceRules);
 results.rules.staticGroundClearanceValue = staticGroundClearanceValue;
 results.rules.usableWheelTravelValue = usableWheelTravelValue;
@@ -472,6 +554,17 @@ results.flags.converged = converged;
 results.flags.rulePass = rulePass;
 results.flags.designPass = designPass;
 results.flags.feasible = feasible;
+results.flags.platformFeasible = feasible;
+results.flags.analysisReady = analysisReady;
+% The reviewed model still has documented architecture/data closure gaps.
+% Keep the top-level engineering gate fail-closed until those gates exist
+% as machine-verifiable inputs rather than user-editable status strings.
+results.flags.engineeringReady = false;
+results.flags.engineeringReadinessStatus = 'not_ready_model_scope';
+results.flags.decisionInvalidReason = '';
+results.flags.classificationValid = classificationValid;
+results.flags.aeroStateValid = aeroStateValid;
+results.flags.nominalReferenceValid = nominalReferenceValid;
 results.flags.wheelJounceViolationAny = wheelJounceViolationAny;
 results.flags.wheelDroopViolationAny = wheelDroopViolationAny;
 results.flags.shockCompViolationAny = shockCompViolationAny;
@@ -491,6 +584,7 @@ results.flags.phiClamped = results.aero.phiClamped;
 results.flags.betaClamped = results.aero.betaClamped;
 results.flags.interpFallbackUsed = results.aero.interpFallbackUsed;
 results.flags.aeroPlatformPass = aeroPlatformPass;
+results.flags.aeroPlatformPassRaw = aeroPlatformPassRaw;
 results.flags.scrapePassQuasiStatic = scrapePassQuasiStatic;
 results.flags.scrapePassBumpAdjusted = scrapePassBumpAdjusted;
 results.flags.mapClassQuasiStatic = classQuasiStatic.classCode;
@@ -501,8 +595,9 @@ results.flags.mapClassBumpAdjustedLabel = classBumpAdjusted.classLabel;
 results.flags.mapClassBumpAdjustedColor = classBumpAdjusted.colorArray;
 results.flags.tireForceModelEnabled = false;
 results.flags.tireEvalFailed = false;
+results.flags.tireEvaluationSkipped = false;
 results.flags.tireOutOfRange = false;
-results.flags.contactLostAny = false;
+results.flags.contactLostAny = contactLostAny;
 if isfield(caseDef, 'validation') && isfield(caseDef.validation, 'badInput')
     results.flags.badInput = logical(caseDef.validation.badInput);
 else
@@ -512,8 +607,12 @@ end
 results.debug = struct();
 results.debug.iterHistory = solveOut.iterHistory;
 results.debug.residualHistory = solveOut.residualHistory;
+results.debug.normalizedResidualHistory = solveOut.normalizedResidualHistory;
 results.debug.lastResidual = solveOut.lastResidual;
+results.debug.lastNormalizedResidual = solveOut.lastNormalizedResidual;
 results.debug.message = solveOut.message;
+results.debug.errorIdentifier = '';
+results.debug.failureStage = '';
 if isfield(solveOut, 'solverUsed')
     results.debug.solverUsed = solveOut.solverUsed;
 else
@@ -532,6 +631,39 @@ results.debug.validation.deltaGroundReconstructed = deltaGround;
 results.debug.validation.wheelJounceFromShock = caseDef.derived.susp.wheelJounceFromShock;
 results.debug.validation.wheelDroopFromShock = caseDef.derived.susp.wheelDroopFromShock;
 results.debug.validation.bumpReserveByPoint = caseDef.derived.bumpAdjust.reserveByPoint;
+results.debug.validation.contactLoadGeneralized = caseDef.derived.geom.V' * FzDynamic;
+results.debug.validation.contactLoadAssumptions = loadComp.assumptions;
+end
+
+function assessment = assess_aero_reference_consistency(caseDef, FzNominal)
+%ASSESS_AERO_REFERENCE_CONSISTENCY Quantify whether the map can reach the target.
+assessment = struct('maxMapFzAtSpeed', nan, 'minimumPossibleLossPct', nan, ...
+    'targetLossReachableWithMap', false);
+if abs(caseDef.man.V) <= 1e-9
+    assessment.maxMapFzAtSpeed = 0;
+    assessment.minimumPossibleLossPct = 0;
+    assessment.targetLossReachableWithMap = true;
+    return;
+end
+if ~strcmpi(caseDef.aero.mapType, 'table_lookup') || ...
+        ~isfield(caseDef.aero.mapData, 'CzTable') || ...
+        ~isfinite(FzNominal) || FzNominal <= 0
+    return;
+end
+CzFinite = caseDef.aero.mapData.CzTable(isfinite(caseDef.aero.mapData.CzTable));
+if isempty(CzFinite)
+    return;
+end
+assessment.maxMapFzAtSpeed = 0.5 * caseDef.aero.rho * caseDef.man.V^2 * ...
+    caseDef.aero.Aref * max(CzFinite);
+assessment.minimumPossibleLossPct = 100 * ...
+    (1 - assessment.maxMapFzAtSpeed / FzNominal);
+if isempty(caseDef.targets.maxAeroLossPct)
+    assessment.targetLossReachableWithMap = true;
+else
+    assessment.targetLossReachableWithMap = ...
+        assessment.minimumPossibleLossPct <= caseDef.targets.maxAeroLossPct;
+end
 end
 
 function [pass, margin] = optional_limit_pass(value, limit)

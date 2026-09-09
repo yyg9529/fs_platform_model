@@ -84,6 +84,11 @@ results.tire.coeff.muY = muY;
 results.tire.coeff.maxAbsMuX = max(abs(muX), [], 'omitnan');
 results.tire.coeff.maxAbsMuY = max(abs(muY), [], 'omitnan');
 
+results.tire.utilization = struct();
+results.tire.utilization.requested = tireEval.utilizationDemand(:);
+results.tire.utilization.clipped = tireEval.utilization(:);
+results.tire.utilization.constraintValue = tireEval.constraintValue(:);
+
 results.tire.balance = struct();
 results.tire.balance.FyFrontTotal = FyFrontTotal;
 results.tire.balance.FyRearTotal = FyRearTotal;
@@ -110,14 +115,24 @@ results.tire.validity.outOfRangeAny = logical(tireEval.validity.outOfRangeAny);
 results.tire.validity.contactLost = tireEval.validity.contactLost(:);
 results.tire.validity.contactLostAny = logical(tireEval.validity.contactLostAny);
 results.tire.validity.evalFailed = false;
+results.tire.validity.evaluationSkipped = false;
 results.tire.validity.wasClipped = tireEval.wasClipped(:);
 
 results.tire.scan = tireEval.scan;
 
 results.flags.tireForceModelEnabled = true;
 results.flags.tireEvalFailed = false;
+results.flags.tireEvaluationSkipped = false;
 results.flags.tireOutOfRange = results.tire.validity.outOfRangeAny;
 results.flags.contactLostAny = results.tire.validity.contactLostAny;
+if results.tire.validity.outOfRangeAny || results.tire.validity.contactLostAny
+    if results.tire.validity.contactLostAny
+        reason = 'Tire evaluation invalid because one or more corners lost contact.';
+    else
+        reason = 'Tire evaluation invalid because an operating point was outside the source domain.';
+    end
+    results = invalidate_decision_state(results, reason);
+end
 
 results.metrics.balanceIndex = balanceIndex;
 results.metrics.peakMarginFront = peakMarginFront;

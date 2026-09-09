@@ -10,6 +10,7 @@ function pitch = calc_pitch_moment(caseDef, aero)
 % 输出:
 %   pitch struct:
 %     Mpitch_aero, Mpitch_drag, Mpitch_x, eta
+%     Mpitch_xTotal, Mpitch_xDirect
 %
 % 公式:
 %   Mpitch_aero = lf*Fz_aero_f - lr*Fz_aero_r + Mpitch_extra
@@ -20,6 +21,8 @@ function pitch = calc_pitch_moment(caseDef, aero)
 %   加速时:
 %     eta_drive = driveBiasR*antiSquatR
 %     Mpitch_x = -m*ax*hCG*(1-eta_drive)
+%     该接口未定义前轴驱动 anti-lift；driveBiasR<1 时，前轴驱动份额
+%     被显式视为 0% direct anti contribution。
 
 veh = caseDef.veh;
 lon = caseDef.longi;
@@ -28,17 +31,21 @@ ax = caseDef.man.ax;
 Mpitch_aero = veh.lf * aero.FzFront - veh.lr * aero.FzRear + aero.pitchMomentExtra;
 Mpitch_drag = aero.Drag * caseDef.aero.hDrag;
 
+Mpitch_xTotal = -veh.m * ax * veh.hCG;
 if ax < 0
     eta = lon.brakeBiasF * lon.antiDiveF + (1 - lon.brakeBiasF) * lon.antiLiftR;
-    Mpitch_x = -veh.m * ax * veh.hCG * (1 - eta);
+    Mpitch_x = Mpitch_xTotal * (1 - eta);
 else
     eta = lon.driveBiasR * lon.antiSquatR;
-    Mpitch_x = -veh.m * ax * veh.hCG * (1 - eta);
+    Mpitch_x = Mpitch_xTotal * (1 - eta);
 end
 
 pitch = struct();
 pitch.Mpitch_aero = Mpitch_aero;
 pitch.Mpitch_drag = Mpitch_drag;
 pitch.Mpitch_x = Mpitch_x;
+pitch.Mpitch_xElastic = Mpitch_x;
+pitch.Mpitch_xTotal = Mpitch_xTotal;
+pitch.Mpitch_xDirect = Mpitch_xTotal - Mpitch_x;
 pitch.eta = eta;
 end

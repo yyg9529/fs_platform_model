@@ -36,6 +36,10 @@ Converged = false(n, 1);
 RulePass = false(n, 1);
 DesignPass = false(n, 1);
 Feasible = false(n, 1);
+PlatformFeasible = false(n, 1);
+AnalysisReady = false(n, 1);
+ClassificationValid = false(n, 1);
+EngineeringReady = false(n, 1);
 
 FrontSpring = nan(n, 1);
 RearSpring = nan(n, 1);
@@ -125,9 +129,12 @@ for i = 1:n
     RulePass(i) = logical(res.flags.rulePass);
     DesignPass(i) = logical(res.flags.designPass);
     Feasible(i) = logical(res.flags.feasible);
+    PlatformFeasible(i) = logical(res.flags.platformFeasible);
+    AnalysisReady(i) = logical(res.flags.analysisReady);
+    ClassificationValid(i) = logical(res.flags.classificationValid);
+    EngineeringReady(i) = logical(res.flags.engineeringReady);
 
-    FrontSpring(i) = mean(res.inputs.sus.ks(1:2));
-    RearSpring(i) = mean(res.inputs.sus.ks(3:4));
+    [FrontSpring(i), RearSpring(i)] = safe_axle_spring_means(res.inputs);
     Z_mm(i) = res.state.z * 1e3;
     Theta_deg(i) = res.state.theta_deg;
     Phi_deg(i) = res.state.phi_deg;
@@ -218,7 +225,8 @@ effectiveDroop = EffectiveDroop;
 effectiveTotalTravel = EffectiveTotalTravel;
 feasible = Feasible;
 
-summaryTable = table(Name, Converged, RulePass, DesignPass, Feasible, ...
+summaryTable = table(Name, Converged, RulePass, DesignPass, Feasible, PlatformFeasible, ...
+    AnalysisReady, ClassificationValid, EngineeringReady, ...
     FrontSpring, RearSpring, ...
     Z_mm, Theta_deg, Phi_deg, Hf_mm, Hr_mm, ...
     hStaticMin, hStaticMin_mm, hDynamicMin, hDynamicMin_mm, ...
@@ -249,6 +257,9 @@ batchResults.resultsList = resultsList;
 batchResults.nCases = n;
 batchResults.nConverged = sum(Converged);
 batchResults.nFeasible = sum(Feasible);
+batchResults.nPlatformFeasible = sum(PlatformFeasible);
+batchResults.nAnalysisReady = sum(AnalysisReady);
+batchResults.nEngineeringReady = sum(EngineeringReady);
 batchResults.summaryTable = summaryTable;
 end
 
@@ -257,5 +268,21 @@ if isempty(ktBand) || any(~isfinite(ktBand))
     s = "";
 else
     s = sprintf('%.0f|%.0f|%.0f', ktBand(1), ktBand(2), ktBand(3));
+end
+end
+
+function [frontSpring, rearSpring] = safe_axle_spring_means(inputs)
+%SAFE_AXLE_SPRING_MEANS Keep batch summaries stable for malformed cases.
+frontSpring = nan;
+rearSpring = nan;
+if ~isstruct(inputs) || ~isscalar(inputs) || ~isfield(inputs, 'sus') || ...
+        ~isstruct(inputs.sus) || ~isscalar(inputs.sus) || ~isfield(inputs.sus, 'ks')
+    return;
+end
+ks = inputs.sus.ks;
+if isnumeric(ks) && isreal(ks) && numel(ks) == 4 && all(isfinite(ks(:)))
+    ks = ks(:);
+    frontSpring = mean(ks(1:2));
+    rearSpring = mean(ks(3:4));
 end
 end

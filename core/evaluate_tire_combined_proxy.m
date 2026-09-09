@@ -24,9 +24,14 @@ function proxyOut = evaluate_tire_combined_proxy(FxPure, FyPure, FxCap, FyCap, p
 %   力 [N]；utilization / peakMargin 为无量纲
 
 nExp = double(proxyCfg.exponent);
-if ~isfinite(nExp) || nExp <= 0
+if ~isscalar(nExp) || ~isfinite(nExp) || nExp < 1
     error('evaluate_tire_combined_proxy:BadExponent', ...
-        'combinedProxy.exponent must be a finite positive scalar.');
+        'combinedProxy.exponent must be a finite scalar >= 1.');
+end
+proxyType = lower(strtrim(char(string(proxyCfg.type))));
+if ~strcmp(proxyType, 'friction_ellipse')
+    error('evaluate_tire_combined_proxy:UnsupportedType', ...
+        'Only combinedProxy.type=''friction_ellipse'' is implemented.');
 end
 
 FxCapEff = max(abs(FxCap), eps);
@@ -34,24 +39,26 @@ FyCapEff = max(abs(FyCap), eps);
 
 uFx = abs(FxPure) ./ FxCapEff;
 uFy = abs(FyPure) ./ FyCapEff;
-demand = uFx .^ nExp + uFy .^ nExp;
+constraintValue = uFx .^ nExp + uFy .^ nExp;
+utilizationDemand = constraintValue .^ (1.0 / nExp);
 
-scale = ones(size(demand));
-maskClip = demand > 1.0;
-scale(maskClip) = demand(maskClip) .^ (-1.0 / nExp);
+scale = ones(size(constraintValue));
+maskClip = constraintValue > 1.0;
+scale(maskClip) = constraintValue(maskClip) .^ (-1.0 / nExp);
 
 proxyOut = struct();
-proxyOut.type = char(string(proxyCfg.type));
+proxyOut.type = proxyType;
 proxyOut.exponent = nExp;
 proxyOut.requestedFx = FxPure;
 proxyOut.requestedFy = FyPure;
 proxyOut.clippedFx = FxPure .* scale;
 proxyOut.clippedFy = FyPure .* scale;
-proxyOut.utilizationDemand = demand;
-proxyOut.utilization = min(demand, 1.0);
+proxyOut.constraintValue = constraintValue;
+proxyOut.utilizationDemand = utilizationDemand;
+proxyOut.utilization = min(utilizationDemand, 1.0);
 proxyOut.scale = scale;
 proxyOut.wasClipped = maskClip;
 
 % peakMargin > 0 表示距离边界仍有余量，=0 贴边，<0 表示请求量已经超出纯表能力组合。
-proxyOut.peakMargin = 1.0 - demand .^ (1.0 / nExp);
+proxyOut.peakMargin = 1.0 - utilizationDemand;
 end

@@ -29,17 +29,8 @@ end
 figHandle = figure('Name', 'V1.5 Tire Table Scan', 'Color', 'w');
 
 if isstruct(scanData) && isfield(scanData, 'enable') && logical(scanData.enable)
-    xVal = scanData.valuesSI(:);
+    xVal = scanData.valuesRaw(:);
     xLabel = sprintf('%s [%s]', scanData.field, scanData.unit);
-    if strcmpi(scanData.field, 'alpha')
-        if strcmpi(scanData.unit, 'deg')
-            xVal = rad2deg(scanData.valuesSI(:));
-        end
-    elseif strcmpi(scanData.field, 'gamma')
-        if strcmpi(scanData.unit, 'deg')
-            xVal = rad2deg(scanData.valuesSI(:));
-        end
-    end
 
     tiledlayout(2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -117,11 +108,9 @@ function util = utilization_or_default(results)
 if isfield(results.tire, 'scan') && isstruct(results.tire.scan) && logical(results.tire.scan.enable)
     util = max(results.tire.scan.utilization, [], 2, 'omitnan');
 elseif isfield(results.tire, 'balance') && isfield(results.tire, 'validity')
-    if isfield(results.tire, 'forces') && isfield(results.tire.forces, 'Fx') ...
-            && isfield(results.tire.forces, 'Fy') && isfield(results.tire.forces, 'FxCap') ...
-            && isfield(results.tire.forces, 'FyCap')
-        util = max(abs(results.tire.forces.Fx) ./ max(abs(results.tire.forces.FxCap), eps), ...
-            abs(results.tire.forces.Fy) ./ max(abs(results.tire.forces.FyCap), eps));
+    if isfield(results.tire, 'utilization') ...
+            && isfield(results.tire.utilization, 'requested')
+        util = results.tire.utilization.requested(:);
     else
         util = nan(4,1);
     end

@@ -91,14 +91,18 @@ grid on;
 box on;
 set(gca, 'Layer', 'top');
 
-legendHandles = gobjects(4, 1);
 palette = sweepOut.metadata.classPalette;
 labels = sweepOut.metadata.classLabels;
-for i = 1:4
-    legendHandles(i) = scatter(nan, nan, 120, palette(i, :), 's', 'filled', ...
-        'MarkerEdgeColor', [0.20, 0.20, 0.20], 'DisplayName', char(labels(i)));
+invalidColor = sweepOut.metadata.invalidClassColor;
+legendPalette = [palette; invalidColor];
+legendLabels = [string(labels(:)); ...
+    sweepOut.metadata.invalidClassLabel + " (" + string(sweepOut.metadata.invalidClassCode) + ")"];
+legendHandles = gobjects(numel(legendLabels), 1);
+for i = 1:numel(legendLabels)
+    legendHandles(i) = scatter(nan, nan, 120, legendPalette(i, :), 's', 'filled', ...
+        'MarkerEdgeColor', [0.20, 0.20, 0.20], 'DisplayName', char(legendLabels(i)));
 end
-legend(legendHandles, cellstr(labels), 'Location', 'eastoutside');
+legend(legendHandles, cellstr(legendLabels), 'Location', 'eastoutside');
 hold off;
 end
 

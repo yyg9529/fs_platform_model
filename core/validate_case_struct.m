@@ -24,11 +24,15 @@
 % 单位约定:
 %   全部采用 SI（m, kg, N, rad, m/s, m/s^2）
 
-if nargin < 1 || ~isstruct(caseDef)
-    error('validate_case_struct:BadInput', 'caseDef must be a struct.');
+if nargin < 1 || ~isstruct(caseDef) || ~isscalar(caseDef)
+    error('validate_case_struct:BadInput', 'caseDef must be a scalar struct.');
 end
 
 defaults = local_default_case();
+shapeMessages = validate_struct_shape(caseDef, defaults, 'caseDef');
+if ~isempty(shapeMessages)
+    error('validate_case_struct:BadNestedStruct', '%s', strjoin(shapeMessages, ' | '));
+end
 [caseDef, filled] = ensure_fields(caseDef, defaults, true);
 filledForWarning = filter_reportable_autofill_fields(filled);
 
@@ -60,18 +64,45 @@ for i = 1:numel(topReq)
 end
 
 % ===== 车辆基础范围检查 =====
-vehMustScalar = {'m','g','L','wf_static','tf','tr','hCG'};
+vehMustScalar = {'m','g','L','wf_static','tf','tr','hCG','hRCf','hRCr'};
 for i = 1:numel(vehMustScalar)
     fn = vehMustScalar{i};
     if ~is_finite_scalar(caseDef.veh.(fn))
         report.messages{end+1, 1} = sprintf('caseDef.veh.%s must be finite numeric scalar.', fn);
     end
 end
-if caseDef.veh.m <= 0; report.messages{end+1, 1} = 'caseDef.veh.m must be > 0.'; end
-if caseDef.veh.g <= 0; report.messages{end+1, 1} = 'caseDef.veh.g must be > 0.'; end
-if caseDef.veh.L <= 0; report.messages{end+1, 1} = 'caseDef.veh.L must be > 0.'; end
-if caseDef.veh.wf_static <= 0 || caseDef.veh.wf_static >= 1
+if is_finite_scalar(caseDef.veh.m) && caseDef.veh.m <= 0; report.messages{end+1, 1} = 'caseDef.veh.m must be > 0.'; end
+if is_finite_scalar(caseDef.veh.g) && caseDef.veh.g <= 0; report.messages{end+1, 1} = 'caseDef.veh.g must be > 0.'; end
+if is_finite_scalar(caseDef.veh.L) && caseDef.veh.L <= 0; report.messages{end+1, 1} = 'caseDef.veh.L must be > 0.'; end
+if is_finite_scalar(caseDef.veh.tf) && caseDef.veh.tf <= 0; report.messages{end+1, 1} = 'caseDef.veh.tf must be > 0.'; end
+if is_finite_scalar(caseDef.veh.tr) && caseDef.veh.tr <= 0; report.messages{end+1, 1} = 'caseDef.veh.tr must be > 0.'; end
+if is_finite_scalar(caseDef.veh.hCG) && caseDef.veh.hCG < 0; report.messages{end+1, 1} = 'caseDef.veh.hCG must be >= 0.'; end
+if is_finite_scalar(caseDef.veh.wf_static) && ...
+        (caseDef.veh.wf_static <= 0 || caseDef.veh.wf_static >= 1)
     report.messages{end+1, 1} = 'caseDef.veh.wf_static must be in (0,1).';
+end
+
+axleFields = {'lf','lr'};
+for i = 1:numel(axleFields)
+    fn = axleFields{i};
+    value = caseDef.veh.(fn);
+    if ~isempty(value) && (~is_finite_scalar(value) || value <= 0)
+        report.messages{end+1, 1} = sprintf( ...
+            'caseDef.veh.%s must be empty or a finite positive scalar.', fn);
+    end
+end
+lfValid = is_finite_scalar(caseDef.veh.lf) && caseDef.veh.lf > 0;
+lrValid = is_finite_scalar(caseDef.veh.lr) && caseDef.veh.lr > 0;
+LValid = is_finite_scalar(caseDef.veh.L) && caseDef.veh.L > 0;
+if LValid && lfValid && lrValid
+    splitTol = max(1e-9, 1e-6 * caseDef.veh.L);
+    if abs(caseDef.veh.lf + caseDef.veh.lr - caseDef.veh.L) > splitTol
+        report.messages{end+1, 1} = 'caseDef.veh.lf + caseDef.veh.lr must equal caseDef.veh.L.';
+    end
+elseif LValid && lfValid && caseDef.veh.lf >= caseDef.veh.L
+    report.messages{end+1, 1} = 'caseDef.veh.lf must be less than caseDef.veh.L when lr is omitted.';
+elseif LValid && lrValid && caseDef.veh.lr >= caseDef.veh.L
+    report.messages{end+1, 1} = 'caseDef.veh.lr must be less than caseDef.veh.L when lf is omitted.';
 end
 
 % ===== 必要角点字段规范化为 [4x1] =====
@@ -93,6 +124,13 @@ elseif isnumeric(caseDef.sus.kw)
     [vec, ok, msg] = normalize_corner_vector(caseDef.sus.kw, 'kw');
     if ok
         caseDef.sus.kw = vec;
+        kwFromSpring = caseDef.sus.ks .* (caseDef.sus.mr .^ 2);
+        kwScale = max(abs(kwFromSpring), 1.0);
+        if any(abs(vec - kwFromSpring) ./ kwScale > 1e-8)
+            report.messages{end+1, 1} = [ ...
+                'caseDef.sus.kw conflicts with ks.*mr.^2. Leave kw empty for automatic ', ...
+                'derivation or provide a consistent legacy value.'];
+        end
     else
         report.messages{end+1, 1} = msg;
     end
@@ -118,6 +156,8 @@ end
 
 if ~is_finite_scalar(caseDef.sus.kArbF) || ~is_finite_scalar(caseDef.sus.kArbR)
     report.messages{end+1, 1} = 'caseDef.sus.kArbF/kArbR must be finite scalar.';
+elseif caseDef.sus.kArbF < 0 || caseDef.sus.kArbR < 0
+    report.messages{end+1, 1} = 'caseDef.sus.kArbF/kArbR must be >= 0.';
 end
 
 % ===== deprecated 字段兼容警告（不参与主求解） =====
@@ -176,8 +216,8 @@ if okExt && okCmp && okSta
 end
 
 % ===== tire.mode 检查 =====
-modeStr = lower(strtrim(char(string(caseDef.tire.mode))));
-if ~ismember(modeStr, {'off','fixed','range'})
+[modeOk, modeStr] = local_validate_enum_string(caseDef.tire.mode, {'off','fixed','range'});
+if ~modeOk
     report.messages{end+1, 1} = 'caseDef.tire.mode must be ''off'', ''fixed'', or ''range''.';
 end
 caseDef.tire.mode = modeStr;
@@ -225,7 +265,10 @@ end
 report.messages = [report.messages; tireOpMsgs(:)];
 
 % ===== rules 字段检查 =====
-ruleFields = {'ruleSet','minStaticGroundClearance','minUsableWheelTravelTotal','minJounce','enforceRules'};
+ruleFields = {'ruleSet','minStaticGroundClearance','minUsableWheelTravelTotal','minJounce', ...
+    'staticGroundClearanceSource','staticGroundClearanceClause', ...
+    'staticGroundClearanceEvidenceStatus','travelConstraintSource', ...
+    'travelConstraintClause','travelEvidenceStatus','enforceRules'};
 for i = 1:numel(ruleFields)
     if ~isfield(caseDef.rules, ruleFields{i})
         report.messages{end+1,1} = sprintf('caseDef.rules.%s missing.', ruleFields{i});
@@ -233,6 +276,15 @@ for i = 1:numel(ruleFields)
 end
 if ~ischar(caseDef.rules.ruleSet) && ~isstring(caseDef.rules.ruleSet)
     report.messages{end+1,1} = 'caseDef.rules.ruleSet must be char/string.';
+end
+ruleTextFields = {'staticGroundClearanceSource','staticGroundClearanceClause', ...
+    'staticGroundClearanceEvidenceStatus','travelConstraintSource', ...
+    'travelConstraintClause','travelEvidenceStatus'};
+for i = 1:numel(ruleTextFields)
+    fn = ruleTextFields{i};
+    if ~local_is_string_like(caseDef.rules.(fn))
+        report.messages{end+1,1} = sprintf('caseDef.rules.%s must be char/string scalar.', fn);
+    end
 end
 if ~is_finite_scalar(caseDef.rules.minStaticGroundClearance) || caseDef.rules.minStaticGroundClearance < 0
     report.messages{end+1,1} = 'caseDef.rules.minStaticGroundClearance must be >=0 scalar.';
@@ -259,7 +311,8 @@ end
 if ~is_finite_scalar(caseDef.targets.minDynamicClearance)
     report.messages{end+1,1} = 'caseDef.targets.minDynamicClearance must be finite scalar.';
 end
-if caseDef.targets.minDynamicClearance < 0
+if is_finite_scalar(caseDef.targets.minDynamicClearance) && ...
+        caseDef.targets.minDynamicClearance < 0
     report.messages{end+1,1} = 'caseDef.targets.minDynamicClearance must be >=0.';
 end
 
@@ -326,8 +379,10 @@ if ~ischar(caseDef.bumpAdjust.notes) && ~isstring(caseDef.bumpAdjust.notes)
 end
 
 % ===== mapType 检查 =====
-mapType = string(caseDef.aero.mapType);
-if ~(mapType == "function_handle" || mapType == "table_lookup")
+[mapTypeOk, mapTypeText] = local_validate_enum_string( ...
+    caseDef.aero.mapType, {'function_handle','table_lookup'});
+mapType = string(mapTypeText);
+if ~mapTypeOk
     report.messages{end+1, 1} = 'caseDef.aero.mapType must be ''function_handle'' or ''table_lookup''.';
 end
 
@@ -340,6 +395,17 @@ if mapType == "table_lookup"
     end
 
     if all(isfield(caseDef.aero.mapData, mapReq))
+        gridFields = {'hfGrid','hrGrid','phiGrid','betaGrid'};
+        for i = 1:numel(gridFields)
+            fn = gridFields{i};
+            grid = caseDef.aero.mapData.(fn);
+            if ~(isnumeric(grid) && isreal(grid) && isvector(grid) && ...
+                    numel(grid) >= 2 && all(isfinite(grid(:))) && all(diff(grid(:)) > 0))
+                report.messages{end+1, 1} = sprintf( ...
+                    'caseDef.aero.mapData.%s must be a finite, strictly increasing numeric vector with at least two points.', fn);
+            end
+        end
+
         n1 = numel(caseDef.aero.mapData.hfGrid);
         n2 = numel(caseDef.aero.mapData.hrGrid);
         n3 = numel(caseDef.aero.mapData.phiGrid);
@@ -355,15 +421,165 @@ if mapType == "table_lookup"
         if ~isequal(size(caseDef.aero.mapData.frontShareTable), szExpect)
             report.messages{end+1, 1} = 'frontShareTable size must match [numel(hfGrid), numel(hrGrid), numel(phiGrid), numel(betaGrid)].';
         end
+        tableFields = {'CzTable','CdTable','frontShareTable'};
+        for i = 1:numel(tableFields)
+            fn = tableFields{i};
+            values = caseDef.aero.mapData.(fn);
+            if ~(isnumeric(values) && isreal(values) && ...
+                    all(~isinf(values(:))) && any(isfinite(values(:))))
+                report.messages{end+1, 1} = sprintf( ...
+                    ['caseDef.aero.mapData.%s must be real numeric, contain at least one ', ...
+                    'finite value, and contain no Inf. NaN gaps are handled by interpolation fallback.'], fn);
+            end
+        end
+        frontShareValues = caseDef.aero.mapData.frontShareTable;
+        if isnumeric(frontShareValues)
+            finiteFrontShare = frontShareValues(isfinite(frontShareValues));
+            if any(finiteFrontShare(:) < 0 | finiteFrontShare(:) > 1)
+                report.messages{end+1, 1} = 'frontShareTable values must remain within [0, 1].';
+            end
+        end
+        dragValues = caseDef.aero.mapData.CdTable;
+        if isnumeric(dragValues)
+            finiteDrag = dragValues(isfinite(dragValues));
+            if any(finiteDrag(:) < 0)
+                report.messages{end+1, 1} = 'CdTable values must be nonnegative.';
+            end
+        end
     end
 end
 
-% ===== clearance 点长度一致性 =====
-xc = caseDef.ref.xClear(:);
-yc = caseDef.ref.yClear(:);
-hc = caseDef.ref.hClear0(:);
+if ~is_finite_scalar(caseDef.aero.rho) || caseDef.aero.rho <= 0
+    report.messages{end+1, 1} = 'caseDef.aero.rho must be a finite positive scalar.';
+end
+if ~is_finite_scalar(caseDef.aero.Aref) || caseDef.aero.Aref <= 0
+    report.messages{end+1, 1} = 'caseDef.aero.Aref must be a finite positive scalar.';
+end
+if ~is_finite_scalar(caseDef.aero.hDrag)
+    report.messages{end+1, 1} = 'caseDef.aero.hDrag must be a finite scalar signed relative to the CG.';
+end
+
+% ===== longitudinal direct-path parameters =====
+antiFields = {'antiDiveF','antiLiftR','antiSquatR'};
+for i = 1:numel(antiFields)
+    fn = antiFields{i};
+    value = caseDef.longi.(fn);
+    if ~is_finite_scalar(value) || value < 0 || value > 1
+        report.messages{end+1, 1} = sprintf( ...
+            'caseDef.longi.%s must be a finite fraction in [0,1].', fn);
+    end
+end
+biasFields = {'brakeBiasF','driveBiasR'};
+for i = 1:numel(biasFields)
+    fn = biasFields{i};
+    value = caseDef.longi.(fn);
+    if ~is_finite_scalar(value) || value < 0 || value > 1
+        report.messages{end+1, 1} = sprintf( ...
+            'caseDef.longi.%s must be a finite fraction in [0,1].', fn);
+    end
+end
+if is_finite_scalar(caseDef.longi.driveBiasR) && caseDef.longi.driveBiasR < 1
+    report.warnings{end+1, 1} = [ ...
+        'caseDef.longi.driveBiasR < 1: the current acceleration anti model ', ...
+        'assumes the front driven share has zero direct anti-lift contribution.'];
+end
+
+% ===== aero provenance contract =====
+aeroTextFields = {'evidenceStatus','mapSource','nominalSource','mapLoadStatus', ...
+    'mapLoadMessage','nominalLoadStatus','nominalLoadMessage'};
+for i = 1:numel(aeroTextFields)
+    fn = aeroTextFields{i};
+    if ~local_is_string_like(caseDef.aero.(fn))
+        report.messages{end+1, 1} = sprintf( ...
+            'caseDef.aero.%s must be a char/string scalar.', fn);
+    end
+end
+if local_is_string_like(caseDef.aero.evidenceStatus)
+    evidenceStatus = lower(strtrim(char(string(caseDef.aero.evidenceStatus))));
+    if ~ismember(evidenceStatus, {'unverified','synthetic_demo','validated'})
+        report.messages{end+1, 1} = ...
+            'caseDef.aero.evidenceStatus must be unverified, synthetic_demo, or validated.';
+    else
+        caseDef.aero.evidenceStatus = evidenceStatus;
+        if strcmp(evidenceStatus, 'validated')
+            mapSourceEmpty = ~local_is_string_like(caseDef.aero.mapSource) || ...
+                isempty(strtrim(char(string(caseDef.aero.mapSource))));
+            nominalSourceEmpty = ~local_is_string_like(caseDef.aero.nominalSource) || ...
+                isempty(strtrim(char(string(caseDef.aero.nominalSource))));
+            if mapSourceEmpty || nominalSourceEmpty
+                report.messages{end+1, 1} = ...
+                    'Validated aero evidence requires nonempty mapSource and nominalSource.';
+            end
+        end
+    end
+end
+loadStatusAllowed = {'loaded','provided_inline','not_applicable', ...
+    'fallback_missing','fallback_invalid','fallback_error'};
+loadStatusFields = {'mapLoadStatus','nominalLoadStatus'};
+for i = 1:numel(loadStatusFields)
+    fn = loadStatusFields{i};
+    if local_is_string_like(caseDef.aero.(fn))
+        value = lower(strtrim(char(string(caseDef.aero.(fn)))));
+        if ~ismember(value, loadStatusAllowed)
+            report.messages{end+1, 1} = sprintf( ...
+                'caseDef.aero.%s has an unsupported status.', fn);
+        else
+            caseDef.aero.(fn) = value;
+        end
+    end
+end
+
+% A missing nominal reference is allowed so downstream validity can report
+% "Not Evaluated". A provided table, however, must be internally coherent.
+if isstruct(caseDef.aero.nominalRef) && ~isscalar(caseDef.aero.nominalRef)
+    report.messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef must be a scalar struct.';
+elseif isstruct(caseDef.aero.nominalRef) && ~isempty(fieldnames(caseDef.aero.nominalRef))
+    nominalMsgs = local_validate_nominal_reference(caseDef.aero.nominalRef);
+    report.messages = [report.messages; nominalMsgs(:)];
+elseif ~(isstruct(caseDef.aero.nominalRef) || isa(caseDef.aero.nominalRef, 'function_handle'))
+    report.messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef must be a struct or function handle.';
+end
+
+% ===== reference geometry / clearance contract =====
+refScalarFields = {'xAeroF','xAeroR','hAeroF0','hAeroR0'};
+for i = 1:numel(refScalarFields)
+    fn = refScalarFields{i};
+    if ~is_finite_scalar(caseDef.ref.(fn))
+        report.messages{end+1, 1} = sprintf( ...
+            'caseDef.ref.%s must be a finite numeric scalar.', fn);
+    end
+end
+clearanceNumericOk = isnumeric(caseDef.ref.xClear) && isreal(caseDef.ref.xClear) && ...
+    isnumeric(caseDef.ref.yClear) && isreal(caseDef.ref.yClear) && ...
+    isnumeric(caseDef.ref.hClear0) && isreal(caseDef.ref.hClear0) && ...
+    all(isfinite(caseDef.ref.xClear(:))) && all(isfinite(caseDef.ref.yClear(:))) && ...
+    all(isfinite(caseDef.ref.hClear0(:)));
+if clearanceNumericOk
+    xc = caseDef.ref.xClear(:);
+    yc = caseDef.ref.yClear(:);
+    hc = caseDef.ref.hClear0(:);
+else
+    xc = [];
+    yc = [];
+    hc = [];
+    report.messages{end+1, 1} = ...
+        'caseDef.ref.xClear/yClear/hClear0 must be finite real numeric arrays.';
+end
+nameClearOk = (iscell(caseDef.ref.nameClear) && ...
+    all(cellfun(@(x) ischar(x) || (isstring(x) && isscalar(x)), caseDef.ref.nameClear(:)))) || ...
+    (isstring(caseDef.ref.nameClear) && isvector(caseDef.ref.nameClear));
+if nameClearOk
+    caseDef.ref.nameClear = cellstr(string(caseDef.ref.nameClear(:)));
+else
+    report.messages{end+1, 1} = ...
+        'caseDef.ref.nameClear must be a cell/string vector of point names.';
+end
 nc = numel(caseDef.ref.nameClear);
-if ~(numel(xc) == numel(yc) && numel(yc) == numel(hc) && numel(hc) == nc)
+if ~clearanceNumericOk || ...
+        ~nameClearOk || ...
+        ~(numel(xc) == numel(yc) && numel(yc) == numel(hc) && numel(hc) == nc)
     report.messages{end+1, 1} = 'caseDef.ref.xClear/yClear/hClear0/nameClear size mismatch.';
 else
     caseDef.ref.xClear = xc;
@@ -380,6 +596,9 @@ for i = 1:numel(manFields)
         report.messages{end+1, 1} = sprintf('caseDef.man.%s must be finite numeric scalar.', fn);
     end
 end
+if is_finite_scalar(caseDef.man.V) && caseDef.man.V < 0
+    report.messages{end+1, 1} = 'caseDef.man.V must be >= 0.';
+end
 
 % ===== 求解器字段检查 =====
 solverFields = {'tol','maxIter','relax','useAeroIter','verbose', ...
@@ -393,17 +612,25 @@ for i = 1:numel(solverFields)
     end
 end
 
-caseDef.solver.initialGuess = caseDef.solver.initialGuess(:);
-if numel(caseDef.solver.initialGuess) ~= 3
-    report.messages{end+1, 1} = 'caseDef.solver.initialGuess must be [3x1].';
+if isnumeric(caseDef.solver.initialGuess) && isreal(caseDef.solver.initialGuess)
+    caseDef.solver.initialGuess = caseDef.solver.initialGuess(:);
+else
+    caseDef.solver.initialGuess = nan(0,1);
 end
-if caseDef.solver.maxIter < 1
-    report.messages{end+1, 1} = 'caseDef.solver.maxIter must be >= 1.';
+if numel(caseDef.solver.initialGuess) ~= 3 || any(~isfinite(caseDef.solver.initialGuess))
+    report.messages{end+1, 1} = ...
+        'caseDef.solver.initialGuess must be a finite real numeric [3x1].';
 end
-if caseDef.solver.tol <= 0
-    report.messages{end+1, 1} = 'caseDef.solver.tol must be > 0.';
+if ~is_finite_scalar(caseDef.solver.maxIter) || caseDef.solver.maxIter < 1 ...
+        || caseDef.solver.maxIter ~= floor(caseDef.solver.maxIter)
+    report.messages{end+1, 1} = 'caseDef.solver.maxIter must be a positive integer.';
 end
-
+if ~is_finite_scalar(caseDef.solver.tol) || caseDef.solver.tol <= 0
+    report.messages{end+1, 1} = 'caseDef.solver.tol must be a finite positive scalar.';
+end
+if ~is_finite_scalar(caseDef.solver.relax) || caseDef.solver.relax <= 0 || caseDef.solver.relax > 1
+    report.messages{end+1, 1} = 'caseDef.solver.relax must be in (0,1].';
+end
 boolFields = {'useAeroIter','verbose','exportDebug','checkWheelTravel','checkShockStroke', ...
     'strictTravelViolation','errorOnInterpFailure','rangeUseNominalAsPrimary', ...
     'useNonlinearCorner','warnOnDeprecatedInput'};
@@ -520,10 +747,16 @@ defaults.tireOp = struct( ...
         'notes', ''));
 
 defaults.rules = struct( ...
-    'ruleSet', 'FSC_FSG_common', ...
+    'ruleSet', 'unverified_project_constraints', ...
     'minStaticGroundClearance', 0.030, ...
     'minUsableWheelTravelTotal', 0.050, ...
     'minJounce', 0.025, ...
+    'staticGroundClearanceSource', '', ...
+    'staticGroundClearanceClause', '', ...
+    'staticGroundClearanceEvidenceStatus', 'unverified', ...
+    'travelConstraintSource', '', ...
+    'travelConstraintClause', '', ...
+    'travelEvidenceStatus', 'unverified', ...
     'enforceRules', true);
 
 defaults.targets = struct( ...
@@ -553,6 +786,13 @@ defaults.aero = struct( ...
     'mapType', 'function_handle', ...
     'mapData', struct(), ...
     'nominalRef', struct(), ...
+    'evidenceStatus', 'unverified', ...
+    'mapSource', '', ...
+    'nominalSource', '', ...
+    'mapLoadStatus', 'not_applicable', ...
+    'mapLoadMessage', '', ...
+    'nominalLoadStatus', 'not_applicable', ...
+    'nominalLoadMessage', '', ...
     'hDrag', 0.1);
 
 defaults.ref = struct( ...
@@ -792,8 +1032,9 @@ else
 end
 
 if ~(isnumeric(caseDef.tire.forceModel.combinedProxy.exponent) && isscalar(caseDef.tire.forceModel.combinedProxy.exponent) ...
-        && isfinite(caseDef.tire.forceModel.combinedProxy.exponent) && caseDef.tire.forceModel.combinedProxy.exponent > 0)
-    messages{end+1,1} = 'caseDef.tire.forceModel.combinedProxy.exponent must be positive finite scalar.';
+        && isfinite(caseDef.tire.forceModel.combinedProxy.exponent) && caseDef.tire.forceModel.combinedProxy.exponent >= 1)
+    messages{end+1,1} = ...
+        'caseDef.tire.forceModel.combinedProxy.exponent must be a finite scalar >= 1.';
 end
 
 [okSrc, srcVal] = local_validate_enum_string(caseDef.tire.forceModel.sourceType, ...
@@ -824,10 +1065,10 @@ else
 end
 
 [okType, typeVal] = local_validate_enum_string(caseDef.tire.forceModel.combinedProxy.type, ...
-    {'friction_ellipse','combined_utilization_proxy'});
+    {'friction_ellipse'});
 if ~okType
     messages{end+1,1} = ...
-        'caseDef.tire.forceModel.combinedProxy.type must be ''friction_ellipse'' or ''combined_utilization_proxy''.';
+        'caseDef.tire.forceModel.combinedProxy.type must be ''friction_ellipse''; no other proxy type is implemented.';
 else
     caseDef.tire.forceModel.combinedProxy.type = typeVal;
 end
@@ -930,12 +1171,77 @@ valueOut = lower(strtrim(char(string(valueIn))));
 ok = ismember(valueOut, allowedSet);
 end
 
+function messages = validate_struct_shape(actual, defaults, prefix)
+%VALIDATE_STRUCT_SHAPE Reject non-struct values at schema struct nodes.
+messages = {};
+defaultFields = fieldnames(defaults);
+for i = 1:numel(defaultFields)
+    fn = defaultFields{i};
+    defaultValue = defaults.(fn);
+    if ~isstruct(defaultValue) || ~isfield(actual, fn) || isempty(actual.(fn))
+        continue;
+    end
+    actualValue = actual.(fn);
+    fieldPath = sprintf('%s.%s', prefix, fn);
+    if strcmp(fieldPath, 'caseDef.aero.nominalRef') && isa(actualValue, 'function_handle')
+        continue;
+    end
+    if ~isstruct(actualValue) || ~isscalar(actualValue)
+        messages{end+1, 1} = sprintf('%s must be a scalar struct.', fieldPath); %#ok<AGROW>
+        continue;
+    end
+    nestedMessages = validate_struct_shape(actualValue, defaultValue, fieldPath);
+    messages = [messages; nestedMessages(:)]; %#ok<AGROW>
+end
+end
+
 function msg = local_validate_unit_field(valueIn, allowedSet, fieldName)
 %LOCAL_VALIDATE_UNIT_FIELD 生成统一的单位枚举报错信息。
 msg = '';
 [ok, ~] = local_validate_enum_string(valueIn, allowedSet);
 if ~ok
     msg = sprintf('%s has unsupported unit string.', fieldName);
+end
+end
+
+function messages = local_validate_nominal_reference(nominalRef)
+%LOCAL_VALIDATE_NOMINAL_REFERENCE Validate a provided tabulated reference.
+messages = {};
+VGrid = [];
+if isfield(nominalRef, 'VGrid'); VGrid = nominalRef.VGrid; end
+if isempty(VGrid) && isfield(nominalRef, 'V'); VGrid = nominalRef.V; end
+if isempty(VGrid)
+    messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef requires VGrid (or V) when a table is provided.';
+    return;
+end
+if ~(isnumeric(VGrid) && isreal(VGrid) && isvector(VGrid) && numel(VGrid) >= 2 && ...
+        all(isfinite(VGrid(:))) && all(diff(VGrid(:)) > 0))
+    messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef speed grid must be finite, strictly increasing, and have at least two points.';
+    return;
+end
+
+FzGrid = [];
+if isfield(nominalRef, 'FzNominal'); FzGrid = nominalRef.FzNominal; end
+if isempty(FzGrid) && isfield(nominalRef, 'Fz'); FzGrid = nominalRef.Fz; end
+if ~isempty(FzGrid) && ~(isnumeric(FzGrid) && isreal(FzGrid) && ...
+        numel(FzGrid) == numel(VGrid) && all(isfinite(FzGrid(:))) && all(FzGrid(:) >= 0))
+    messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef Fz values must be finite, nonnegative, and match the speed grid.';
+end
+
+frontShareGrid = [];
+if isfield(nominalRef, 'frontShareNominal')
+    frontShareGrid = nominalRef.frontShareNominal;
+elseif isfield(nominalRef, 'frontShare')
+    frontShareGrid = nominalRef.frontShare;
+end
+if ~isempty(frontShareGrid) && ~(isnumeric(frontShareGrid) && isreal(frontShareGrid) && ...
+        numel(frontShareGrid) == numel(VGrid) && all(isfinite(frontShareGrid(:))) && ...
+        all(frontShareGrid(:) >= 0 & frontShareGrid(:) <= 1))
+    messages{end+1, 1} = ...
+        'caseDef.aero.nominalRef front-share values must be finite, within [0,1], and match the speed grid.';
 end
 end
 
@@ -961,6 +1267,7 @@ end
 % 2) scan.enable=false 时 field/values/unit 为空是合理的
 compatOnly = [ ...
     "sus.kt"; ...
+    "sus.kw"; ...
     "sus.kBump"; ...
     "sus.bumpGap"; ...
     "sus.kDroop"; ...
@@ -968,7 +1275,20 @@ compatOnly = [ ...
     "tire.forceModel.file"; ...
     "tireOp.scan.field"; ...
     "tireOp.scan.values"; ...
-    "tireOp.scan.unit" ...
+    "tireOp.scan.unit"; ...
+    "aero.evidenceStatus"; ...
+    "aero.mapSource"; ...
+    "aero.nominalSource"; ...
+    "aero.mapLoadStatus"; ...
+    "aero.mapLoadMessage"; ...
+    "aero.nominalLoadStatus"; ...
+    "aero.nominalLoadMessage"; ...
+    "rules.staticGroundClearanceSource"; ...
+    "rules.staticGroundClearanceClause"; ...
+    "rules.staticGroundClearanceEvidenceStatus"; ...
+    "rules.travelConstraintSource"; ...
+    "rules.travelConstraintClause"; ...
+    "rules.travelEvidenceStatus" ...
     ];
 fieldsStr = string(fieldsIn);
 maskKeep = ~ismember(fieldsStr, compatOnly);

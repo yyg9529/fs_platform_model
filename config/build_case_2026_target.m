@@ -35,7 +35,7 @@ caseDef.veh.lr = caseDef.veh.wf_static * caseDef.veh.L;
 % 2026 目标悬架
 caseDef.sus.ks = [41000; 41000; 45000; 45000];
 caseDef.sus.mr = [0.92; 0.92; 0.94; 0.94];
-caseDef.sus.kw = caseDef.sus.ks .* (caseDef.sus.mr .^ 2);
+caseDef.sus.kw = [];
 caseDef.sus.kArbF = 2900;
 caseDef.sus.kArbR = 2500;
 caseDef.sus.shockLenExtended = [0.314; 0.314; 0.330; 0.330];

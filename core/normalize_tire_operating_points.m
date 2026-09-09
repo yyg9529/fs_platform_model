@@ -77,6 +77,8 @@ switch modeStr
         error('normalize_tire_operating_points:BadMode', 'Unsupported tireOp.mode: %s', modeStr);
 end
 
+local_validate_pressure_contract(pressure, metaPressure);
+
 tireOpNorm = struct();
 tireOpNorm.mode = modeStr;
 tireOpNorm.cornerNames = cornerNames;
@@ -140,7 +142,9 @@ switch fieldName
     case 'kappa'
         valuesSI = local_convert_kappa(valuesRaw, unitName);
     case 'pressure'
-        valuesSI = local_convert_pressure(valuesRaw, unitName);
+        error('normalize_tire_operating_points:UnsupportedPressureScan', ...
+            ['pressure scans are unsupported because the current tire-table schema ', ...
+            'has no pressure interpolation dimension.']);
     otherwise
         error('normalize_tire_operating_points:BadScanField', ...
             'Unsupported tireOp.scan.field: %s', fieldName);
@@ -197,6 +201,30 @@ if isfield(tireTableData, 'meta') && isfield(tireTableData.meta, 'pressure') ...
     else
         value = str2double(string(tireTableData.meta.pressure));
     end
+    if isfield(tireTableData.meta, 'pressureUnit') && ~isempty(tireTableData.meta.pressureUnit)
+        value = local_convert_pressure(value, tireTableData.meta.pressureUnit);
+        value = value(1);
+    end
+end
+end
+
+function local_validate_pressure_contract(pressure, metaPressure)
+% Pressure is metadata-only until a pressure axis is added to every table.
+finitePressure = pressure(isfinite(pressure));
+if isempty(finitePressure)
+    return;
+end
+if isempty(metaPressure) || ~isfinite(metaPressure)
+    error('normalize_tire_operating_points:UnsupportedPressureInput', ...
+        ['pressure was supplied, but the current tire table has neither a pressure ', ...
+        'dimension nor a finite reference pressure.']);
+end
+tolerance = max(1.0, 1e-6 * abs(metaPressure));
+if any(abs(finitePressure - metaPressure) > tolerance)
+    error('normalize_tire_operating_points:PressureMismatch', ...
+        ['Requested pressure differs from the table reference pressure. The current ', ...
+        'schema cannot interpolate pressure, so returning pressure-insensitive forces ', ...
+        'would be misleading.']);
 end
 end
 

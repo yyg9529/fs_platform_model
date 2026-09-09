@@ -29,17 +29,16 @@ end
 [caseList, metadata] = build_spring_sweep_cases(baseCase, sweepDef);
 batchOut = run_batch(caseList, options);
 
-nFront = metadata.nFront;
-nRear = metadata.nRear;
-resultGrid = reshape(batchOut.resultsList, nRear, nFront);
+resultGrid = batchOut.resultsList(metadata.indexGrid);
 summaryTable = batchOut.summaryTable;
 
-aeroPassGrid = reshape(logical(summaryTable.aeroPlatformPass), nRear, nFront);
-scrapeQuasiGrid = reshape(logical(summaryTable.scrapePassQuasiStatic), nRear, nFront);
-scrapeBumpGrid = reshape(logical(summaryTable.scrapePassBumpAdjusted), nRear, nFront);
+aeroPassGrid = logical(summaryTable.aeroPlatformPass(metadata.indexGrid));
+scrapeQuasiGrid = logical(summaryTable.scrapePassQuasiStatic(metadata.indexGrid));
+scrapeBumpGrid = logical(summaryTable.scrapePassBumpAdjusted(metadata.indexGrid));
+validGrid = logical(summaryTable.ClassificationValid(metadata.indexGrid));
 
-classQuasi = classify_spring_sweep_map(aeroPassGrid, scrapeQuasiGrid);
-classBump = classify_spring_sweep_map(aeroPassGrid, scrapeBumpGrid);
+classQuasi = classify_spring_sweep_map(aeroPassGrid, scrapeQuasiGrid, validGrid);
+classBump = classify_spring_sweep_map(aeroPassGrid, scrapeBumpGrid, validGrid);
 
 sweepOut = struct();
 sweepOut.frontSpringValues = metadata.frontSpringValues;
@@ -56,4 +55,7 @@ sweepOut.batchOut = batchOut;
 sweepOut.metadata = metadata;
 sweepOut.metadata.classPalette = classQuasi.palette;
 sweepOut.metadata.classLabels = classQuasi.labels;
+sweepOut.metadata.invalidClassCode = -1;
+sweepOut.metadata.invalidClassLabel = "Not Evaluated";
+sweepOut.metadata.invalidClassColor = classQuasi.invalidColor;
 end

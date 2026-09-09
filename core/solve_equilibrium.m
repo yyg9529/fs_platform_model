@@ -22,6 +22,7 @@ q = q(1:3);
 
 iterHistory = zeros(solver.maxIter + 1, 4);
 residualHistory = nan(solver.maxIter + 1, 1);
+normalizedResidualHistory = nan(solver.maxIter + 1, 1);
 
 resOpt = struct('useNonlinearCorner', solver.useNonlinearCorner);
 frozenLoads = [];
@@ -43,9 +44,13 @@ if ~solver.useAeroIter
 
     solveOut = struct();
     solveOut.q = q;
-    solveOut.converged = norm(R, 2) < solver.tol;
+    physicalResidualNorm = norm(R, 2);
+    normalizedResidualNorm = residual_norm(caseDef, R);
+    solveOut.converged = normalizedResidualNorm < solver.tol;
     solveOut.iterHistory = [0, q(:).'];
-    solveOut.residualHistory = norm(R, 2);
+    solveOut.residualHistory = physicalResidualNorm;
+    solveOut.normalizedResidualHistory = normalizedResidualNorm;
+    solveOut.lastNormalizedResidual = normalizedResidualNorm;
     solveOut.lastResidual = R;
     solveOut.message = 'Linear closed-form solve used.';
     solveOut.solverUsed = 'linear_closed_form';
@@ -59,15 +64,18 @@ message = 'Max iterations reached without convergence.';
 for k = 1:solver.maxIter
     [R, ~] = residual_equilibrium(caseDef, q, resOpt);
     resNorm = norm(R, 2);
+    normalizedResNorm = residual_norm(caseDef, R);
 
     iterHistory(k, :) = [k, q(:).'];
     residualHistory(k) = resNorm;
+    normalizedResidualHistory(k) = normalizedResNorm;
 
     if solver.verbose
-        fprintf('[Iter %d] |R|=%.3e, q=[%.6e %.6e %.6e]\n', k, resNorm, q(1), q(2), q(3));
+        fprintf('[Iter %d] |R|=%.3e, |R|scaled=%.3e, q=[%.6e %.6e %.6e]\n', ...
+            k, resNorm, normalizedResNorm, q(1), q(2), q(3));
     end
 
-    if resNorm < solver.tol
+    if normalizedResNorm < solver.tol
         converged = true;
         message = sprintf('Converged in %d iterations.', k);
         break;
@@ -91,9 +99,16 @@ for k = 1:solver.maxIter
     end
 
     if norm(dq, 2) < solver.tol * 1e-2
-        q = q + solver.relax * dq;
-        converged = true;
-        message = sprintf('Step small enough at iteration %d.', k);
+        qCandidate = q + solver.relax * dq;
+        RCandidate = residual_only(caseDef, qCandidate, resOpt);
+        if residual_norm(caseDef, RCandidate) < solver.tol
+            q = qCandidate;
+            converged = true;
+            message = sprintf('Converged with a small step at iteration %d.', k);
+        else
+            message = sprintf(['Newton iteration stagnated at iteration %d: ', ...
+                'step is small but scaled residual exceeds tolerance.'], k);
+        end
         break;
     end
 
@@ -104,7 +119,7 @@ for k = 1:solver.maxIter
     for a = alphas
         qTry = q + a * dq;
         RTry = residual_only(caseDef, qTry, resOpt);
-        nTry = norm(RTry, 2);
+        nTry = residual_norm(caseDef, RTry);
         if nTry < bestNorm
             bestNorm = nTry;
             bestQ = qTry;
@@ -114,7 +129,8 @@ for k = 1:solver.maxIter
 end
 
 [Rfinal, ctxFinal] = residual_equilibrium(caseDef, q, resOpt);
-if ~converged && norm(Rfinal, 2) < solver.tol
+lastNormalizedResidual = residual_norm(caseDef, Rfinal);
+if ~converged && lastNormalizedResidual < solver.tol
     converged = true;
     message = 'Converged at final residual check.';
 end
@@ -122,16 +138,28 @@ end
 validIter = iterHistory(:,1) > 0;
 iterHistory = iterHistory(validIter, :);
 residualHistory = residualHistory(validIter);
+normalizedResidualHistory = normalizedResidualHistory(validIter);
 
 solveOut = struct();
 solveOut.q = q;
 solveOut.converged = converged;
 solveOut.iterHistory = iterHistory;
 solveOut.residualHistory = residualHistory;
+solveOut.normalizedResidualHistory = normalizedResidualHistory;
 solveOut.lastResidual = Rfinal;
+solveOut.lastNormalizedResidual = lastNormalizedResidual;
 solveOut.message = message;
 solveOut.solverUsed = 'newton_damped';
 solveOut.ctx = ctxFinal;
+end
+
+function value = residual_norm(caseDef, residual)
+%RESIDUAL_NORM Dimensionless norm for [force, pitch moment, roll moment].
+forceScale = max(caseDef.veh.m * caseDef.veh.g, 1.0);
+pitchScale = max(forceScale * caseDef.veh.L, 1.0);
+rollLever = 0.5 * max(caseDef.veh.tf, caseDef.veh.tr);
+rollScale = max(forceScale * rollLever, 1.0);
+value = norm(residual(:) ./ [forceScale; pitchScale; rollScale], 2);
 end
 
 function J = finite_diff_jacobian(funR, q)

@@ -37,36 +37,54 @@ lr = wfStatic * L;
 
 ksBase = [38000; 38000; 42000; 42000];
 mrBase = [0.90; 0.90; 0.92; 0.92];
-kwBase = ksBase .* (mrBase .^ 2);
 
 [mapDataFallback, nominalFallback] = aero_lookup_tables();
 
-% 优先尝试读取 MAT（若不存在或不合法则回退到占位 map）
+% 优先尝试读取 MAT（若不存在或不合法则回退到占位 map）。
+% 加载状态必须随 case 传递，禁止把 fallback 静默伪装成已加载数据。
 mapData = mapDataFallback;
 matPath = fullfile(dataDir, 'aero_map_baseline.mat');
+mapLoadStatus = 'fallback_missing';
+mapLoadMessage = sprintf('Aero map file not found: %s', matPath);
 if exist(matPath, 'file')
     try
         S = load(matPath);
         if isfield(S, 'mapData') && isstruct(S.mapData)
             mapData = S.mapData;
+            mapLoadStatus = 'loaded';
+            mapLoadMessage = '';
+        else
+            mapLoadStatus = 'fallback_invalid';
+            mapLoadMessage = 'MAT file does not contain a struct named mapData.';
         end
-    catch
-        % 保持 fallback
+    catch ME
+        mapLoadStatus = 'fallback_error';
+        mapLoadMessage = ME.message;
     end
 end
 
 % 优先读取 CSV 名义参考
 nominalRef = nominalFallback;
 csvPath = fullfile(dataDir, 'aero_nominal_curve.csv');
+nominalLoadStatus = 'fallback_missing';
+nominalLoadMessage = sprintf('Aero nominal-reference file not found: %s', csvPath);
 if exist(csvPath, 'file')
     try
         T = readtable(csvPath);
+        requiredVariables = {'V_mps', 'FzNominal_N', 'frontShareNominal'};
+        if ~all(ismember(requiredVariables, T.Properties.VariableNames))
+            error('build_case_2025_baseline:InvalidNominalReference', ...
+                'Nominal-reference CSV is missing one or more required columns.');
+        end
         nominalRef = struct();
         nominalRef.VGrid = T.V_mps;
         nominalRef.FzNominal = T.FzNominal_N;
         nominalRef.frontShareNominal = T.frontShareNominal;
-    catch
-        % 保持 fallback
+        nominalLoadStatus = 'loaded';
+        nominalLoadMessage = '';
+    catch ME
+        nominalLoadStatus = 'fallback_error';
+        nominalLoadMessage = ME.message;
     end
 end
 
@@ -101,7 +119,7 @@ caseDef.veh = struct( ...
 caseDef.sus = struct( ...
     'ks', ksBase, ...
     'mr', mrBase, ...
-    'kw', kwBase, ...
+    'kw', [], ...
     'jounceMax', [0.045; 0.045; 0.050; 0.050], ...
     'droopMax', [0.030; 0.030; 0.035; 0.035], ...
     'shockLenExtended', [0.312; 0.312; 0.328; 0.328], ...
@@ -167,12 +185,21 @@ caseDef.tireOp = struct( ...
         'applyMode', 'all_corners', ...
         'notes', 'Set enable=true to request tire scan output in results.tire.scan'));
 
-% 赛规层约束（V1.0.4：静态离地高 + effective travel）
+% 赛规约束及条款来源：
+%   - 30 mm 静态离地间隙来自 FSG 2026 v1.1 T2.2.1；
+%   - 50 mm usable wheel travel 与驾驶员坐入时 25 mm minimum jounce 来自 T2.5.1。
+% 注意：此处只声明 FSG 2026，不能在未取得官方原文时自动等同为 FSC 2026。
 caseDef.rules = struct( ...
-    'ruleSet', 'FSC_FSG_common', ...
+    'ruleSet', 'FSG_2026_v1.1', ...
     'minStaticGroundClearance', 0.030, ...
     'minUsableWheelTravelTotal', 0.050, ...
     'minJounce', 0.025, ...
+    'staticGroundClearanceSource', 'https://www.formulastudent.de/fileadmin/user_upload/all/2026/rules/FS-Rules_2026_v1.1.pdf', ...
+    'staticGroundClearanceClause', 'T2.2.1', ...
+    'staticGroundClearanceEvidenceStatus', 'verified_public_rule', ...
+    'travelConstraintSource', 'https://www.formulastudent.de/fileadmin/user_upload/all/2026/rules/FS-Rules_2026_v1.1.pdf', ...
+    'travelConstraintClause', 'T2.5.1', ...
+    'travelEvidenceStatus', 'verified_public_rule', ...
     'enforceRules', true);
 
 % 工程目标层（V1.0.4：动态离地高 + 姿态/气动窗口）
@@ -207,6 +234,13 @@ caseDef.aero.mapType = 'table_lookup';
 caseDef.aero.mapData = mapData;
 caseDef.aero.nominalRef = nominalRef;
 caseDef.aero.hDrag = 0.120;
+caseDef.aero.evidenceStatus = 'synthetic_demo';
+caseDef.aero.mapSource = matPath;
+caseDef.aero.nominalSource = csvPath;
+caseDef.aero.mapLoadStatus = mapLoadStatus;
+caseDef.aero.mapLoadMessage = mapLoadMessage;
+caseDef.aero.nominalLoadStatus = nominalLoadStatus;
+caseDef.aero.nominalLoadMessage = nominalLoadMessage;
 
 % 参考量
 caseDef.ref = struct();
